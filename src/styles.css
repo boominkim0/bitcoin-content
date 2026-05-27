@@ -1,0 +1,355 @@
+:root {
+  color: #211d17;
+  background: #d7e8f0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #d7e8f0;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(35, 53, 45, 0.18)),
+    url("/asian-temple-bg.png") center bottom / cover no-repeat;
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.04));
+  pointer-events: none;
+}
+
+.lego-stage {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  height: 100vh;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.blocks-container {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 20px;
+}
+
+.block-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  transition: padding 0.3s ease;
+}
+
+.custom-scrollbar {
+  position: absolute;
+  right: 12px;
+  top: 48px;
+  bottom: 140px;
+  width: 10px;
+  z-index: 10;
+}
+
+.scrollbar-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.scrollbar-thumb {
+  position: absolute;
+  left: 1px;
+  width: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  cursor: grab;
+  transition: background 0.2s;
+}
+
+.scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.scrollbar-thumb:active {
+  cursor: grabbing;
+}
+
+.stack-row {
+  position: relative;
+  width: min(100%, 560px);
+  height: 132px;
+  margin-top: -56px;
+}
+
+.cube {
+  --front: #8f866f;
+  --side: #655c4c;
+  --top: #b8ad91;
+  --line: rgba(51, 43, 31, 0.34);
+  --ink: #fff5d5;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 430px;
+  height: 104px;
+  transform: translateX(-50%);
+  filter:
+    drop-shadow(0 22px 22px rgba(35, 29, 20, 0.28))
+    drop-shadow(0 2px 0 rgba(255, 245, 210, 0.34));
+}
+
+.cube-front,
+.cube-side,
+.cube-top {
+  position: absolute;
+  border: 2px solid rgba(39, 33, 25, 0.5);
+}
+
+.cube-front {
+  left: 16px;
+  top: 40px;
+  display: grid;
+  place-items: center;
+  width: 268px;
+  height: 74px;
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, transparent 0 24%, var(--line) 24% 24.8%, transparent 24.8% 49%, var(--line) 49% 49.8%, transparent 49.8% 74%, var(--line) 74% 74.8%, transparent 74.8%),
+    linear-gradient(180deg, transparent 0 48%, var(--line) 48% 50%, transparent 50%),
+    radial-gradient(circle at 18% 32%, rgba(255, 255, 255, 0.18), transparent 20%),
+    radial-gradient(circle at 76% 70%, rgba(40, 34, 26, 0.22), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.12)),
+    var(--front);
+  border-radius: 3px 0 0 3px;
+  z-index: 2;
+}
+
+.cube-front strong {
+  display: block;
+  max-width: 238px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 2rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.45),
+    0 0 10px rgba(255, 211, 122, 0.5);
+}
+
+.cube-side {
+  right: 0;
+  top: 40px;
+  display: grid;
+  place-items: center;
+  width: 146px;
+  height: 74px;
+  color: rgba(255, 255, 255, 0.92);
+  background:
+    linear-gradient(180deg, transparent 0 48%, rgba(38, 31, 23, 0.42) 48% 50%, transparent 50%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent),
+    var(--side);
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+  z-index: 1;
+}
+
+.cube-side time {
+  display: grid;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.cube-side time span {
+  display: block;
+  line-height: 1;
+}
+.cube::before,
+.cube::after {
+  content: "";
+  position: absolute;
+  left: -26px;
+  z-index: 4;
+  width: 500px;
+  height: 14px;
+  border: 2px solid rgba(39, 33, 25, 0.48);
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, transparent 0 12%, var(--line) 12% 12.8%, transparent 12.8% 30%, var(--line) 30% 30.8%, transparent 30.8% 48%, var(--line) 48% 48.8%, transparent 48.8% 66%, var(--line) 66% 66.8%, transparent 66.8% 84%, var(--line) 84% 84.8%, transparent 84.8%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.15)),
+    var(--top);
+  box-shadow: 0 4px 0 rgba(39, 33, 25, 0.16);
+}
+
+.cube::before {
+  top: 32px;
+}
+
+.cube::after {
+  top: 108px;
+}
+
+.cube-difficulty {
+  --front: #6f8b84;
+  --side: #4f6862;
+  --top: #9eb7ae;
+  --ink: #f4fff8;
+}
+
+.cube-halving {
+  --front: #8a748e;
+  --side: #65516a;
+  --top: #b4a0b8;
+  --ink: #fffdf8;
+}
+
+.cube-difficulty.cube-halving {
+  --front: #9a7460;
+  --side: #704d40;
+  --top: #bd9d88;
+}
+
+.cube.skeleton {
+  --front: #a0a0a0;
+  --side: #808080;
+  --top: #b8b8b8;
+  --ink: #d0d0d0;
+}
+
+.skeleton-text {
+  display: block;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #c0c0c0 25%, #e0e0e0 50%, #c0c0c0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.sentinel-row {
+  width: 100%;
+  height: 1px;
+  margin-top: 0 !important;
+  flex-shrink: 0;
+}
+
+.spacer-row {
+  width: 100%;
+  flex-shrink: 0;
+  margin-top: 0 !important;
+}
+
+.load-state {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  max-width: min(420px, calc(100% - 28px));
+  padding: 10px 14px;
+  color: #8d291f;
+  background: rgba(255, 235, 230, 0.96);
+  border: 1px solid rgba(141, 41, 31, 0.18);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 520px) {
+  .lego-stage {
+    padding: 34px 12px 120px;
+  }
+
+  .stack-row {
+    height: 114px;
+    margin-top: -14px;
+  }
+
+  .cube {
+    width: 350px;
+    height: 90px;
+  }
+
+  .cube-front {
+    left: 12px;
+    width: 210px;
+    height: 64px;
+    top: 36px;
+  }
+
+  .cube-front strong {
+    max-width: 188px;
+    font-size: 1.5rem;
+  }
+
+  .cube-side {
+    width: 128px;
+    height: 64px;
+    top: 36px;
+  }
+
+  .cube-side time {
+    font-size: 0.62rem;
+  }
+
+  .cube-top {
+    left: -2px;
+    width: 316px;
+    height: 42px;
+  }
+
+  .cube::before,
+  .cube::after {
+    left: -16px;
+    width: 340px;
+    height: 12px;
+  }
+
+  .cube::before {
+    top: 30px;
+  }
+
+  .cube::after {
+    top: 94px;
+  }
+}
