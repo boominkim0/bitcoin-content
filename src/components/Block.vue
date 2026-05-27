@@ -1,17 +1,16 @@
 <template>
   <article class="cube" :class="blockClass">
     <div class="cube-front">
-      <strong>#{{ formatNumber(props.block.height) }}</strong>
+      <strong v-if="props.isIng">ING</strong>
+      <strong v-else>#{{ formatNumber(props.block.height) }}</strong>
     </div>
     <div class="cube-side">
-      <time v-if="props.block.time">
+      <time v-if="props.block.time && !props.isIng">
         <span>{{ cubeDate(props.block.time).date }}</span>
         <span>{{ cubeDate(props.block.time).time }}</span>
       </time>
-      <template v-else>
-        <span class="skeleton-text" style="width: 80px; height: 14px; margin-bottom: 5px;"></span>
-        <span class="skeleton-text" style="width: 60px; height: 14px;"></span>
-      </template>
+      <time v-else-if="props.isIng" class="ing-dot"></time>
+      <time v-else></time>
     </div>
   </article>
 </template>
@@ -22,6 +21,7 @@ import type { BlockData } from '../api'
 
 interface Props {
   block: BlockData
+  isIng?: boolean
 }
 
 const props = defineProps<Props>()
@@ -30,7 +30,8 @@ const DIFFICULTY_INTERVAL = 2016
 const HALVING_INTERVAL = 210000
 
 const blockClass = computed(() => {
-  if (!props.block.time) return 'skeleton'
+  if (props.isIng) return 'cube-ing'
+  if (!props.block.time) return ''
   return {
     'cube-difficulty': isDifficultyAdjustment(props.block.height),
     'cube-halving': isHalving(props.block.height)
@@ -200,24 +201,40 @@ function cubeDate(value: number): { date: string; time: string } {
   --top: #bd9d88;
 }
 
-.cube.skeleton {
+.cube-ing {
   --front: #a0a0a0;
   --side: #808080;
   --top: #b8b8b8;
   --ink: #d0d0d0;
+  animation: ing-pulse 2.2s ease-in-out infinite;
+
+  .cube-front strong {
+    animation: ing-glow 2.2s ease-in-out infinite;
+  }
+
+  .ing-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ffcc66;
+    animation: ing-dot-blink 1.2s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(255, 204, 102, 0.6);
+  }
 }
 
-.skeleton-text {
-  display: block;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #c0c0c0 25%, #e0e0e0 50%, #c0c0c0 75%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s infinite;
+@keyframes ing-pulse {
+  0%, 100% { opacity: 0.55; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.18); }
 }
 
-@keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+@keyframes ing-glow {
+  0%, 100% { text-shadow: 0 0 5px rgba(255, 211, 122, 0.2); }
+  50% { text-shadow: 0 0 18px rgba(255, 211, 122, 0.9), 0 0 35px rgba(255, 211, 122, 0.5); }
+}
+
+@keyframes ing-dot-blink {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
 }
 
 @media (max-width: 520px) {

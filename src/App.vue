@@ -8,6 +8,9 @@
         <li v-for="block in visibleBlocks" :key="block.height" class="stack-row">
           <Block :block="block" />
         </li>
+        <li class="stack-row ing-block">
+          <Block :block="{ height: tipHeight + 1, hash: null, time: null }" is-ing />
+        </li>
       </ol>
     </div>
 
@@ -146,7 +149,7 @@ function calculateVisibleCount() {
   if (containerHeight.value <= 132) {
     visibleCount.value = 9
   } else {
-    visibleCount.value = Math.ceil((containerHeight.value - 132) / ROW_HEIGHT) + 1
+    visibleCount.value = Math.ceil((containerHeight.value - 132) / ROW_HEIGHT) + 2
   }
 }
 
@@ -264,8 +267,40 @@ function handleResize() {
   }
 }
 
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+async function pollStatus() {
+  try {
+    const status = await fetchStatus()
+    const newTip = status.blockchain.blocks
+    const oldTip = tipHeight.value
+
+    if (newTip > oldTip) {
+      tipHeight.value = newTip
+
+      for (let h = oldTip + 1; h <= newTip; h++) {
+        if (!blocks.value.has(h)) {
+          blocks.value.set(h, { height: h, hash: null, time: null })
+        }
+      }
+
+      const max = maxStartHeight.value
+      if (visibleStartHeight.value >= max - (newTip - oldTip)) {
+        visibleStartHeight.value = max
+      }
+
+      await fetchVisibleBlocks()
+    }
+  } catch {
+    // silently fail on polling errors
+  }
+}
+
 onMounted(() => {
-  bootstrap()
+  bootstrap().then(() => {
+    pollTimer = setInterval(pollStatus, 10000)
+  })
+
   if (stageRef.value) {
     stageRef.value.addEventListener('wheel', handleWheel, { passive: false })
   }
@@ -278,6 +313,7 @@ onBeforeUnmount(() => {
   }
   window.removeEventListener('resize', handleResize)
   if (throttleTimer) clearTimeout(throttleTimer)
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 
@@ -314,13 +350,21 @@ onBeforeUnmount(() => {
   list-style: none;
   width: 100%;
   transition: padding 0.3s ease, margin 0.3s ease;
+
+  .ing-block {
+    display: none;
+  }
   
 
   &.top-end {
     padding-top: 84px;
+
+    .ing-block {
+      display: block;
+    }
   }
   &.bottom-end {
-    margin-top: -84px;
+    margin-top: -128px;
   }
 }
 
