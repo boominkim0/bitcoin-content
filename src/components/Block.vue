@@ -1,5 +1,5 @@
 <template>
-  <article class="cube" :class="blockClass">
+  <article class="cube" :class="blockClass" @click="handleClick">
     <div class="cube-front">
       <strong v-if="props.isIng">ING</strong>
       <strong v-else>#{{ formatNumber(props.block.height) }}</strong>
@@ -25,6 +25,15 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  select: [block: BlockData]
+}>()
+
+function handleClick() {
+  if (!props.isIng) {
+    emit('select', props.block)
+  }
+}
 
 const DIFFICULTY_INTERVAL = 2016
 const HALVING_INTERVAL = 210000
@@ -83,6 +92,16 @@ function cubeDate(value: number): { date: string; time: string } {
   filter:
     drop-shadow(0 22px 22px rgba(35, 29, 20, 0.28))
     drop-shadow(0 2px 0 rgba(255, 245, 210, 0.34));
+  cursor: pointer;
+  transition: transform 0.15s ease;
+
+  &:hover {
+    transform: translateX(-50%) scale(1.03);
+  }
+
+  &:active {
+    transform: translateX(-50%) scale(0.98);
+  }
 
   &::before,
   &::after {
@@ -103,6 +122,7 @@ function cubeDate(value: number): { date: string; time: string } {
 
   &::before {
     top: 32px;
+    display: none;
   }
 
   &::after {
@@ -207,6 +227,10 @@ function cubeDate(value: number): { date: string; time: string } {
   --top: #b8b8b8;
   --ink: #d0d0d0;
   animation: ing-pulse 2.2s ease-in-out infinite;
+
+  &:before {
+    display: block;
+  }
 
   .cube-front strong {
     animation: ing-glow 2.2s ease-in-out infinite;

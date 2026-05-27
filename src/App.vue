@@ -6,7 +6,7 @@
         :class="stackClass"
       >
         <li v-for="block in visibleBlocks" :key="block.height" class="stack-row">
-          <Block :block="block" />
+          <Block :block="block" @select="openModal" />
         </li>
         <li class="stack-row ing-block">
           <Block :block="{ height: tipHeight + 1, hash: null, time: null }" is-ing />
@@ -41,6 +41,86 @@
     </div>
 
     <div v-if="errorMessage" class="load-state">{{ errorMessage }}</div>
+
+    <div v-if="selectedBlock" class="block-modal" @click.self="closeModal">
+      <div class="modal-card">
+        <button class="modal-close" @click="closeModal">&times;</button>
+        <div class="modal-header">#{{ formatNumber(selectedBlock.height) }}</div>
+        <div class="modal-body">
+          <div class="modal-row">
+            <span class="modal-label">해시</span>
+            <span class="modal-value modal-hash">{{ selectedBlock.hash ?? '---' }}</span>
+          </div>
+
+          <div class="modal-row two-col">
+            <div>
+              <span class="modal-label">블록에 적힌 시간</span>
+              <span class="modal-value">{{ formatBlockTime(selectedBlock.time, 0) }}</span>
+            </div>
+            <div>
+              <span class="modal-label">한국 시간</span>
+              <span class="modal-value">{{ formatBlockTime(selectedBlock.time, 9) }}</span>
+            </div>
+          </div>
+
+          <div class="modal-row two-col">
+            <div>
+              <span class="modal-label">보상</span>
+              <span class="modal-value">{{ formatBTC(selectedBlock.reward_satoshi) }} BTC</span>
+            </div>
+            <div>
+              <span class="modal-label">거래 수</span>
+              <span class="modal-value">{{ selectedBlock.tx_count?.toLocaleString('ko-KR') ?? '---' }} tx</span>
+            </div>
+          </div>
+
+          <div class="modal-row two-col">
+            <div>
+              <span class="modal-label">난이도</span>
+              <span class="modal-value">{{ selectedBlock.difficulty?.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) ?? '---' }}</span>
+            </div>
+            <div>
+              <span class="modal-label">해시레이트</span>
+              <span class="modal-value">{{ formatHashrate(selectedBlock.hashrate_estimate) }}</span>
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <span class="modal-label">블록 크기</span>
+            <span class="modal-value">{{ formatSize(selectedBlock.size) }}</span>
+          </div>
+
+          <div v-if="selectedBlock.coinbase_message" class="modal-row">
+            <span class="modal-label">채굴자 메시지 (Coinbase)</span>
+            <span class="modal-value modal-message">{{ selectedBlock.coinbase_message }}</span>
+          </div>
+
+          <div v-if="selectedBlock.merkle_root" class="modal-row">
+            <span class="modal-label">머클 루트</span>
+            <span class="modal-value modal-hash">{{ selectedBlock.merkle_root }}</span>
+          </div>
+
+          <div v-if="selectedBlock.nonce !== undefined" class="modal-row">
+            <span class="modal-label">Nonce</span>
+            <span class="modal-value">{{ selectedBlock.nonce.toLocaleString('ko-KR') }}</span>
+          </div>
+
+          <div v-if="selectedBlock.bits" class="modal-row">
+            <span class="modal-label">Bits</span>
+            <span class="modal-value">{{ selectedBlock.bits }}</span>
+          </div>
+
+          <div class="modal-badges">
+            <div v-if="isDifficultyAdjustment(selectedBlock.height)" class="modal-badge difficulty">
+              난이도 조정 블록
+            </div>
+            <div v-if="isHalving(selectedBlock.height)" class="modal-badge halving">
+              반감기 블록
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -68,6 +148,73 @@ let throttleTimer: ReturnType<typeof setTimeout> | null = null
 let isDragging = false
 let dragStartY = 0
 let dragStartHeight = 0
+
+const selectedBlock = ref<BlockData | null>(null)
+
+function openModal(block: BlockData) {
+  selectedBlock.value = block
+}
+
+function closeModal() {
+  selectedBlock.value = null
+}
+
+function isDifficultyAdjustment(height: number): boolean {
+  return height > 0 && height % 2016 === 0
+}
+
+function isHalving(height: number): boolean {
+  return height > 0 && height % 210000 === 0
+}
+
+function formatBlockTime(timestamp: number | null, offsetHours: number): string {
+  if (!timestamp) return '---'
+  const date = new Date((timestamp + offsetHours * 3600) * 1000)
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(date.getUTCDate()).padStart(2, '0')
+  const h = String(date.getUTCHours()).padStart(2, '0')
+  const min = String(date.getUTCMinutes()).padStart(2, '0')
+  const s = String(date.getUTCSeconds()).padStart(2, '0')
+  return `${y}.${m}.${d} ${h}:${min}:${s}`
+}
+
+function getBlockReward(height: number): number {
+  const halvings = Math.floor(height / HALVING_INTERVAL)
+  return 50 / Math.pow(2, halvings)
+}
+
+function formatBTC(satoshi: number | undefined): string {
+  if (satoshi === undefined) {
+    const reward = getBlockReward(selectedBlock.value?.height ?? 0)
+    return reward.toLocaleString('ko-KR', { minimumFractionDigits: 8, maximumFractionDigits: 8 })
+  }
+  return (satoshi / 100000000).toLocaleString('ko-KR', { minimumFractionDigits: 8, maximumFractionDigits: 8 })
+}
+
+function formatSize(bytes: number | undefined): string {
+  if (!bytes) return '---'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex++
+  }
+  return `${value.toFixed(2)} ${units[unitIndex]}`
+}
+
+function formatHashrate(hashrate: number | undefined): string {
+  if (!hashrate) return '---'
+  const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s']
+  let value = hashrate
+  let unitIndex = 0
+  while (value >= 1000 && unitIndex < units.length - 1) {
+    value /= 1000
+    unitIndex++
+  }
+  return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ${units[unitIndex]}`
+}
 
 const maxStartHeight = computed(() => {
   return Math.max(0, tipHeight.value - visibleCount.value + 1)
@@ -345,7 +492,8 @@ onBeforeUnmount(() => {
   flex-direction: column-reverse;
   align-items: center;
   gap: 0;
-  margin: 0;
+  margin-top: -10px;
+
   padding: 0;
   list-style: none;
   width: 100%;
@@ -571,6 +719,154 @@ onBeforeUnmount(() => {
   .stack-row {
     height: 114px;
     margin-top: -14px;
+  }
+}
+
+.block-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  position: relative;
+  background: rgba(255, 253, 248, 0.98);
+  border: 1px solid rgba(141, 41, 31, 0.12);
+  border-radius: 14px;
+  padding: 24px;
+  width: min(380px, calc(100vw - 48px));
+  box-shadow: 0 16px 48px rgba(35, 29, 20, 0.25);
+  animation: modal-in 0.25s ease;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: rgba(33, 29, 23, 0.45);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: rgba(141, 41, 31, 0.08);
+    color: #8d291f;
+  }
+}
+
+.modal-header {
+  font-size: 1.4rem;
+  font-weight: 950;
+  color: #211d17;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(141, 41, 31, 0.12);
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+
+    > div {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+  }
+}
+
+.modal-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(33, 29, 23, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modal-value {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #211d17;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.modal-hash {
+  font-size: 0.78rem;
+  color: rgba(33, 29, 23, 0.75);
+}
+
+.modal-message {
+  font-size: 0.82rem;
+  color: rgba(33, 29, 23, 0.85);
+  white-space: pre-wrap;
+  line-height: 1.4;
+  background: rgba(141, 41, 31, 0.04);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.modal-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.modal-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 900;
+
+  &.difficulty {
+    background: rgba(111, 139, 132, 0.14);
+    color: #4f6862;
+  }
+
+  &.halving {
+    background: rgba(138, 116, 142, 0.14);
+    color: #65516a;
   }
 }
 </style>

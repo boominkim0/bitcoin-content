@@ -5,6 +5,17 @@ export interface BlockData {
   height: number
   hash: string | null
   time: number | null
+  difficulty?: number
+  bits?: number
+  size?: number
+  nonce?: number
+  tx_count?: number
+  merkle_root?: string
+  previousblockhash?: string
+  nextblockhash?: string | null
+  reward_satoshi?: number
+  coinbase_message?: string | null
+  hashrate_estimate?: number
 }
 
 export interface StatusData {
