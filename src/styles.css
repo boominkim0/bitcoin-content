@@ -74,38 +74,93 @@ body::after {
 
 .custom-scrollbar {
   position: absolute;
-  right: 12px;
+  right: 6px;
   top: 48px;
   bottom: 140px;
-  width: 10px;
+  width: 80px;
   z-index: 10;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  user-select: none;
 }
 
 .scrollbar-track {
   position: relative;
-  width: 100%;
+  width: 10px;
   height: 100%;
   background: rgba(0, 0, 0, 0.08);
   border-radius: 5px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .scrollbar-thumb {
   position: absolute;
   left: 1px;
   width: 8px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.28);
   border-radius: 4px;
   cursor: grab;
   transition: background 0.2s;
+  z-index: 2;
 }
 
 .scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .scrollbar-thumb:active {
   cursor: grabbing;
+}
+
+.scrollbar-scale {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-left: 6px;
+  height: 100%;
+}
+
+.scale-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: rgba(33, 29, 23, 0.55);
+  line-height: 1;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.scale-marks {
+  flex: 1;
+  position: relative;
+  width: 100%;
+}
+
+.scale-mark {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mark-line {
+  display: block;
+  width: 8px;
+  height: 1px;
+  background: rgba(33, 29, 23, 0.3);
+}
+
+.mark-value {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: rgba(33, 29, 23, 0.45);
+  line-height: 1;
 }
 
 .stack-row {

@@ -16,6 +16,22 @@
           @mousedown="handleThumbDrag"
         ></div>
       </div>
+      <div class="scrollbar-scale">
+        <div class="scale-label top-label">#{{ formatNumber(tipHeight) }}</div>
+        <div class="scale-marks">
+          <div
+            v-for="mark in scaleMarks"
+            :key="mark.value"
+            class="scale-mark"
+
+            :style="{ top: mark.top + '%' }"
+          >
+            <span class="mark-line"></span>
+            <span class="mark-value">#{{ formatNumber(mark.value) }}</span>
+          </div>
+        </div>
+        <div class="scale-label bottom-label">#0</div>
+      </div>
     </div>
 
     <div v-if="errorMessage" class="load-state">{{ errorMessage }}</div>
@@ -30,6 +46,7 @@ import Block from './components/Block.vue'
 
 const ROW_HEIGHT = 76
 const SCROLL_THROTTLE = 300
+const HALVING_INTERVAL = 210000
 
 const tipHeight = ref<number>(0)
 const blocks = ref<Map<number, BlockData>>(new Map())
@@ -85,6 +102,29 @@ const thumbStyle = computed(() => {
     transform: `translateY(${top}px)`
   }
 })
+
+const scaleMarks = computed(() => {
+  const total = tipHeight.value
+  if (total <= 0) return []
+
+  const marks: { value: number; top: number }[] = []
+
+  const halvingCount = Math.floor(total / HALVING_INTERVAL)
+  for (let i = 1; i <= halvingCount; i++) {
+    const h = i * HALVING_INTERVAL
+    const ratio = 1 - (h / total)
+    marks.push({
+      value: h,
+      top: ratio * 100
+    })
+  }
+
+  return marks.sort((a, b) => a.top - b.top)
+})
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('ko-KR').format(value)
+}
 
 const stackStyle = computed(() => {
   const isTopEnd = visibleStartHeight.value >= maxStartHeight.value
