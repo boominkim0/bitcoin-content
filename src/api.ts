@@ -5,17 +5,39 @@ export interface BlockData {
   height: number
   hash: string | null
   time: number | null
+  nTx?: number
   difficulty?: number
   bits?: number
   size?: number
+  weight?: number
   nonce?: number
   tx_count?: number
   merkle_root?: string
   previousblockhash?: string
   nextblockhash?: string | null
   reward_satoshi?: number
+  subsidy_satoshi?: number
+  total_fee_satoshi?: number
+  avg_fee_satoshi?: number
+  avg_fee_rate?: number
   coinbase_message?: string | null
   hashrate_estimate?: number
+  tx_detail_limit?: number
+  tx_detail_truncated?: boolean
+  tx_summary?: TransactionSummaryData[]
+}
+
+export interface TransactionSummaryData {
+  txid?: string
+  hash?: string
+  is_coinbase: boolean
+  output_satoshi?: number
+  fee_satoshi?: number
+  vsize?: number
+  size?: number
+  weight?: number
+  vin_count?: number
+  vout_count?: number
 }
 
 export interface StatusData {
@@ -29,17 +51,46 @@ export interface BlocksResponse {
 }
 
 export interface MempoolData {
-  tx_count: number
-  total_size_bytes: number
-  total_fee_satoshi: number
-  avg_fee_rate: number
-  min_fee_rate: number
-  max_fee_rate: number
-  recommended_fees: {
-    fastest: number
-    half_hour: number
-    hour: number
-    economy: number
+  loaded: boolean
+  size: number
+  bytes: number
+  usage: number
+  total_fee: number
+  maxmempool: number
+  mempoolminfee: number
+  minrelaytxfee: number
+  incrementalrelayfee: number
+  unbroadcastcount: number
+}
+
+export interface ResourceUsageData {
+  total_bytes: number
+  used_bytes: number
+  used_percent: number
+}
+
+export interface MemoryUsageData extends ResourceUsageData {
+  available_bytes: number
+}
+
+export interface DiskUsageData extends ResourceUsageData {
+  free_bytes: number
+}
+
+export interface ServerStatusData {
+  server_time: string
+  uptime_seconds: number
+  memory: MemoryUsageData | null
+  disk: DiskUsageData | null
+  bitcoin: {
+    ledger_size_bytes: number | null
+    blocks: number | null
+    verification_progress: number | null
+  }
+  network: {
+    bitcoin_network_active: boolean | null
+    connections: number | null
+    rpc_ok: boolean
   }
 }
 
@@ -82,4 +133,8 @@ export async function fetchBlocks(from: number, to: number): Promise<BlockData[]
 
 export async function fetchMempool(): Promise<MempoolData> {
   return request<MempoolData>('/api/v1/mempool')
+}
+
+export async function fetchServerStatus(): Promise<ServerStatusData> {
+  return request<ServerStatusData>('/api/v1/server-status')
 }

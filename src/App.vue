@@ -21,7 +21,7 @@
           />
         </li>
         <li :key="tipHeight + 1" class="stack-row ing-block">
-          <Block :block="{ height: tipHeight + 1, hash: null, time: null }" is-ing @ingSelect="openMempoolModal" />
+          <Block :block="{ height: tipHeight + 1, hash: null, time: null }" is-ing />
         </li>
       </TransitionGroup>
     </div>
@@ -35,7 +35,7 @@
         ></div>
       </div>
       <div class="scrollbar-scale">
-        <div class="scale-label top-label" @click="openNetworkModal">#{{ formatNumber(tipHeight) }}</div>
+        <div class="scale-label top-label">#{{ formatNumber(tipHeight) }}</div>
         <div class="scale-marks">
           <div
             v-for="mark in scaleMarks"
@@ -53,12 +53,27 @@
     </div>
 
     <div v-if="errorMessage" class="load-state">{{ errorMessage }}</div>
+    <ServerStatusPanel @open-network="openNetworkModal" @open-mempool="openMempoolModal" @open-settings="openSettingsModal" />
 
-    <div v-if="networkModalVisible" class="block-modal" @click.self="closeNetworkModal">
+    <div v-if="networkModalVisible" class="block-modal" @click.self="closeNetworkModal" @wheel.stop>
       <div class="modal-card">
         <button class="modal-close" @click="closeNetworkModal">&times;</button>
-        <div class="modal-header">네트워크 현황</div>
+        <div class="modal-header">비트코인 네트워크</div>
         <div class="modal-body">
+          <div class="modal-section">
+            <div class="modal-section-title">현재 체인</div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">최신 블록</span>
+                <span class="modal-value">#{{ formatNumber(tipHeight) }}</span>
+              </div>
+              <div>
+                <span class="modal-label">채굴 대기</span>
+                <span class="modal-value">#{{ formatNumber(tipHeight + 1) }}</span>
+              </div>
+            </div>
+          </div>
+
           <div class="modal-section">
             <div class="modal-section-title">반감기 (Halving)</div>
             <div class="modal-row two-col">
@@ -99,14 +114,14 @@
             <div class="modal-section-title">현재 보상</div>
             <div class="modal-row">
               <span class="modal-label">블록 보상</span>
-              <span class="modal-value">{{ currentBlockReward.toLocaleString('ko-KR', { minimumFractionDigits: 8, maximumFractionDigits: 8 }) }} BTC</span>
+              <span class="modal-value">{{ formatBTCAmount(currentBlockReward) }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="mempoolModalVisible" class="block-modal" @click.self="closeMempoolModal">
+    <div v-if="mempoolModalVisible" class="block-modal" @click.self="closeMempoolModal" @wheel.stop>
       <div class="modal-card">
         <button class="modal-close" @click="closeMempoolModal">&times;</button>
         <div class="modal-header">네트워크 대기열 (Mempool)</div>
@@ -118,59 +133,59 @@
               <div class="modal-row two-col">
                 <div>
                   <span class="modal-label">트랜잭션 수</span>
-                  <span class="modal-value">{{ mempoolData.tx_count.toLocaleString('ko-KR') }} tx</span>
+                  <span class="modal-value">{{ mempoolData.size.toLocaleString('ko-KR') }} tx</span>
                 </div>
                 <div>
                   <span class="modal-label">총 크기</span>
-                  <span class="modal-value">{{ formatSize(mempoolData.total_size_bytes) }}</span>
+                  <span class="modal-value">{{ formatSize(mempoolData.bytes) }}</span>
                 </div>
               </div>
               <div class="modal-row two-col">
                 <div>
                   <span class="modal-label">총 수수료</span>
-                  <span class="modal-value">{{ (mempoolData.total_fee_satoshi / 1e8).toLocaleString('ko-KR', { maximumFractionDigits: 8 }) }} BTC</span>
+                  <span class="modal-value">{{ formatBTCAmount(mempoolData.total_fee) }}</span>
                 </div>
                 <div>
                   <span class="modal-label">평균 수수료</span>
-                  <span class="modal-value">{{ mempoolData.avg_fee_rate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
+                  <span class="modal-value">{{ averageMempoolFeeRate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
                 </div>
               </div>
             </div>
 
             <div class="modal-section">
-              <div class="modal-section-title">수수료 범위</div>
+              <div class="modal-section-title">수수료 기준</div>
               <div class="modal-row two-col">
                 <div>
-                  <span class="modal-label">최저</span>
-                  <span class="modal-value">{{ mempoolData.min_fee_rate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
+                  <span class="modal-label">Mempool 최저</span>
+                  <span class="modal-value">{{ btcPerKvBToSatPerVByte(mempoolData.mempoolminfee).toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
                 </div>
                 <div>
-                  <span class="modal-label">최고</span>
-                  <span class="modal-value">{{ mempoolData.max_fee_rate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
+                  <span class="modal-label">Relay 최저</span>
+                  <span class="modal-value">{{ btcPerKvBToSatPerVByte(mempoolData.minrelaytxfee).toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
                 </div>
               </div>
             </div>
 
             <div class="modal-section">
-              <div class="modal-section-title">권장 수수료 (sat/vB)</div>
+              <div class="modal-section-title">메모리풀 상태</div>
               <div class="modal-row two-col">
                 <div>
-                  <span class="modal-label">즉시 (~10분)</span>
-                  <span class="modal-value">{{ mempoolData.recommended_fees.fastest }}</span>
+                  <span class="modal-label">메모리 사용량</span>
+                  <span class="modal-value">{{ formatSize(mempoolData.usage) }}</span>
                 </div>
                 <div>
-                  <span class="modal-label">30분</span>
-                  <span class="modal-value">{{ mempoolData.recommended_fees.half_hour }}</span>
+                  <span class="modal-label">최대 용량</span>
+                  <span class="modal-value">{{ formatSize(mempoolData.maxmempool) }}</span>
                 </div>
               </div>
               <div class="modal-row two-col">
                 <div>
-                  <span class="modal-label">1시간</span>
-                  <span class="modal-value">{{ mempoolData.recommended_fees.hour }}</span>
+                  <span class="modal-label">미전파 거래</span>
+                  <span class="modal-value">{{ mempoolData.unbroadcastcount.toLocaleString('ko-KR') }} tx</span>
                 </div>
                 <div>
-                  <span class="modal-label">경제적</span>
-                  <span class="modal-value">{{ mempoolData.recommended_fees.economy }}</span>
+                  <span class="modal-label">증분 Relay</span>
+                  <span class="modal-value">{{ btcPerKvBToSatPerVByte(mempoolData.incrementalrelayfee).toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
                 </div>
               </div>
             </div>
@@ -180,72 +195,165 @@
       </div>
     </div>
 
-    <div v-if="selectedBlock" class="block-modal" @click.self="closeModal">
-      <div class="modal-card">
+    <div v-if="settingsModalVisible" class="block-modal" @click.self="closeSettingsModal" @wheel.stop>
+      <div class="modal-card settings-card">
+        <button class="modal-close" @click="closeSettingsModal">&times;</button>
+        <div class="modal-header">표기 설정</div>
+        <div class="modal-body">
+          <div class="modal-section">
+            <div class="modal-section-title">금액 단위</div>
+            <div class="unit-options">
+              <button
+                class="unit-option"
+                :class="{ active: displayUnit === 'btc' }"
+                type="button"
+                @click="setDisplayUnit('btc')"
+              >
+                <strong>BTC</strong>
+                <span>0.0000 0000 형식</span>
+              </button>
+              <button
+                class="unit-option"
+                :class="{ active: displayUnit === 'sats' }"
+                type="button"
+                @click="setDisplayUnit('sats')"
+              >
+                <strong>sats</strong>
+                <span>정수 사토시 형식</span>
+              </button>
+            </div>
+            <div class="modal-state">선택한 단위는 이 브라우저에 저장되어 다음 방문에도 유지됩니다.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="selectedBlock" class="block-modal" @click.self="closeModal" @wheel.stop>
+      <div class="modal-card detail-card">
         <button class="modal-close" @click="closeModal">&times;</button>
         <div class="modal-header">#{{ formatNumber(selectedBlock.height) }}</div>
         <div class="modal-body">
+          <div v-if="selectedBlockLoading" class="modal-state">상세 정보를 불러오는 중...</div>
+          <div v-if="selectedBlockError" class="modal-state error">{{ selectedBlockError }}</div>
+
           <div class="modal-row">
-            <span class="modal-label">해시</span>
+            <span class="modal-label">해시 <InfoTip text="블록을 고유하게 식별하는 64자리 지문입니다. 블록 내용이 조금이라도 바뀌면 해시도 달라집니다." /></span>
             <span class="modal-value modal-hash">{{ selectedBlock.hash ?? '---' }}</span>
           </div>
 
           <div class="modal-row two-col">
             <div>
-              <span class="modal-label">블록에 적힌 시간</span>
+              <span class="modal-label">블록 시간 <InfoTip text="채굴자가 블록 헤더에 기록한 UTC 기준 시간입니다. 네트워크가 허용하는 범위 안에서 실제 발견 시각과 약간 다를 수 있습니다." /></span>
               <span class="modal-value">{{ formatBlockTime(selectedBlock.time, 0) }}</span>
             </div>
             <div>
-              <span class="modal-label">한국 시간</span>
+              <span class="modal-label">한국 시간 <InfoTip text="블록 시간을 한국 표준시(UTC+9)로 바꿔 보여줍니다." /></span>
               <span class="modal-value">{{ formatBlockTime(selectedBlock.time, 9) }}</span>
             </div>
           </div>
 
-          <div class="modal-row two-col">
-            <div>
-              <span class="modal-label">보상</span>
-              <span class="modal-value">{{ formatBTC(selectedBlock.reward_satoshi) }} BTC</span>
+          <div class="modal-section">
+            <div class="modal-section-title">채굴 수익</div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">보조금 <InfoTip text="새 블록을 만든 채굴자에게 새로 발행되어 지급되는 BTC입니다. 반감기마다 줄어듭니다." /></span>
+                <span class="modal-value">{{ formatBlockSubsidy(selectedBlock) }}</span>
+              </div>
+              <div>
+                <span class="modal-label">수수료 <InfoTip text="이 블록에 포함된 거래들이 낸 수수료의 합계입니다. 채굴자는 보조금과 함께 이 수수료를 받습니다." /></span>
+                <span class="modal-value">{{ formatSatoshiAmount(selectedBlock.total_fee_satoshi) }}</span>
+              </div>
             </div>
-            <div>
-              <span class="modal-label">거래 수</span>
-              <span class="modal-value">{{ selectedBlock.tx_count?.toLocaleString('ko-KR') ?? '---' }} tx</span>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">총 보상 <InfoTip text="채굴자가 받은 총액입니다. 보조금과 거래 수수료를 더한 값입니다." /></span>
+                <span class="modal-value">{{ formatBlockReward(selectedBlock) }}</span>
+              </div>
+              <div>
+                <span class="modal-label">평균 수수료 <InfoTip text="블록 안의 일반 거래들이 평균적으로 낸 수수료입니다. Coinbase 거래는 제외됩니다." /></span>
+                <span class="modal-value">{{ formatSatoshiAmount(selectedBlock.avg_fee_satoshi) }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="modal-row two-col">
-            <div>
-              <span class="modal-label">난이도</span>
-              <span class="modal-value">{{ selectedBlock.difficulty?.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) ?? '---' }}</span>
+          <div class="modal-section">
+            <div class="modal-section-title">거래내역 <InfoTip text="블록에 포함된 거래 요약입니다. 화면에는 처음 일부 거래만 표시하고, 전체 거래 수는 별도로 보여줍니다." /></div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">거래 수 <InfoTip text="이 블록 안에 들어 있는 전체 거래 개수입니다. 첫 거래는 항상 Coinbase 거래입니다." /></span>
+                <span class="modal-value">{{ blockTxCount(selectedBlock).toLocaleString('ko-KR') }} tx</span>
+              </div>
+              <div>
+                <span class="modal-label">평균 수수료율 <InfoTip text="거래 데이터 크기(vB)당 평균 수수료입니다. 수수료 시장이 얼마나 비싼지 보는 지표입니다." /></span>
+                <span class="modal-value">{{ formatFeeRate(selectedBlock.avg_fee_rate) }}</span>
+              </div>
             </div>
-            <div>
-              <span class="modal-label">해시레이트</span>
-              <span class="modal-value">{{ formatHashrate(selectedBlock.hashrate_estimate) }}</span>
+
+            <div v-if="selectedTransactions.length" class="tx-list">
+              <div v-for="tx in selectedTransactions" :key="tx.txid || tx.hash" class="tx-item">
+                <div class="tx-head">
+                  <span class="tx-kind">{{ tx.is_coinbase ? 'Coinbase' : 'TX' }}</span>
+                  <span>{{ tx.vin_count ?? 0 }} in / {{ tx.vout_count ?? 0 }} out</span>
+                </div>
+                <div class="txid">{{ shortHash(tx.txid || tx.hash) }}</div>
+                <div class="tx-meta">
+                  <span>출력 {{ formatSatoshiAmount(tx.output_satoshi) }}</span>
+                  <span>{{ tx.is_coinbase ? '채굴 보상 거래' : `수수료 ${formatSatoshiAmount(tx.fee_satoshi)}` }}</span>
+                  <span>{{ tx.vsize ?? tx.size ?? '---' }} vB</span>
+                </div>
+              </div>
+              <div v-if="selectedBlock.tx_detail_truncated" class="tx-note">
+                거래 상세는 처음 {{ selectedBlock.tx_detail_limit ?? selectedTransactions.length }}개만 API에서 제공합니다.
+              </div>
+            </div>
+            <div v-else class="modal-state">거래 요약을 불러오지 못했습니다.</div>
+          </div>
+
+          <div v-if="selectedBlock.coinbase_message" class="modal-section">
+            <div class="modal-section-title">채굴자 메시지 <InfoTip text="Coinbase 거래 안에 채굴자나 채굴 풀이 남긴 임의의 텍스트입니다. 모든 블록에 사람이 읽을 수 있는 메시지가 있는 것은 아닙니다." /></div>
+            <div class="modal-row">
+              <span class="modal-value modal-message">{{ selectedBlock.coinbase_message }}</span>
             </div>
           </div>
 
-          <div class="modal-row">
-            <span class="modal-label">블록 크기</span>
-            <span class="modal-value">{{ formatSize(selectedBlock.size) }}</span>
-          </div>
+          <div class="modal-section">
+            <div class="modal-section-title">블록 기술 정보</div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">난이도 <InfoTip text="이 블록을 찾기 위해 필요한 작업량입니다. 값이 클수록 올바른 해시를 찾기 어렵습니다." /></span>
+                <span class="modal-value">{{ selectedBlock.difficulty?.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) ?? '---' }}</span>
+              </div>
+              <div>
+                <span class="modal-label">해시레이트 <InfoTip text="최근 블록 간격과 난이도로 추정한 네트워크 전체 연산 속도입니다." /></span>
+                <span class="modal-value">{{ formatHashrate(selectedBlock.hashrate_estimate) }}</span>
+              </div>
+            </div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">블록 크기 <InfoTip text="블록 데이터의 실제 바이트 크기입니다." /></span>
+                <span class="modal-value">{{ formatSize(selectedBlock.size) }}</span>
+              </div>
+              <div>
+                <span class="modal-label">가중치 <InfoTip text="SegWit 이후 블록 한도를 계산하는 단위입니다. 최대 약 4,000,000 weight unit입니다." /></span>
+                <span class="modal-value">{{ selectedBlock.weight?.toLocaleString('ko-KR') ?? '---' }} WU</span>
+              </div>
+            </div>
 
-          <div v-if="selectedBlock.coinbase_message" class="modal-row">
-            <span class="modal-label">채굴자 메시지 (Coinbase)</span>
-            <span class="modal-value modal-message">{{ selectedBlock.coinbase_message }}</span>
-          </div>
+            <div v-if="selectedBlock.merkle_root" class="modal-row">
+              <span class="modal-label">머클 루트 <InfoTip text="블록 안의 모든 거래를 하나의 해시로 요약한 값입니다. 거래 목록이 바뀌면 머클 루트도 바뀝니다." /></span>
+              <span class="modal-value modal-hash">{{ selectedBlock.merkle_root }}</span>
+            </div>
 
-          <div v-if="selectedBlock.merkle_root" class="modal-row">
-            <span class="modal-label">머클 루트</span>
-            <span class="modal-value modal-hash">{{ selectedBlock.merkle_root }}</span>
-          </div>
-
-          <div v-if="selectedBlock.nonce !== undefined" class="modal-row">
-            <span class="modal-label">Nonce</span>
-            <span class="modal-value">{{ selectedBlock.nonce.toLocaleString('ko-KR') }}</span>
-          </div>
-
-          <div v-if="selectedBlock.bits" class="modal-row">
-            <span class="modal-label">Bits</span>
-            <span class="modal-value">{{ selectedBlock.bits }}</span>
+            <div v-if="selectedBlock.nonce !== undefined" class="modal-row two-col">
+              <div>
+                <span class="modal-label">Nonce <InfoTip text="채굴자가 목표 해시를 찾기 위해 바꿔가며 시도한 숫자입니다." /></span>
+                <span class="modal-value">{{ selectedBlock.nonce.toLocaleString('ko-KR') }}</span>
+              </div>
+              <div v-if="selectedBlock.bits">
+                <span class="modal-label">Bits <InfoTip text="현재 난이도 목표값을 압축해 표현한 블록 헤더 필드입니다." /></span>
+                <span class="modal-value">{{ selectedBlock.bits }}</span>
+              </div>
+            </div>
           </div>
 
           <div class="modal-badges">
@@ -264,15 +372,21 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { fetchBlocks, fetchStatus, fetchMempool } from './api'
+import { fetchBlock, fetchBlocks, fetchStatus, fetchMempool } from './api'
 import type { BlockData, MempoolData } from './api'
 import Block from './components/Block.vue'
+import InfoTip from './components/InfoTip.vue'
+import ServerStatusPanel from './components/ServerStatusPanel.vue'
 
 const ROW_HEIGHT = 76
 const SCROLL_THROTTLE = 300
 const HALVING_INTERVAL = 210000
 const NEW_BLOCK_ANIMATION_MS = 1200
 const NEW_BLOCK_STAGGER_MS = 160
+const SATOSHI_PER_BTC = 100000000
+const DISPLAY_UNIT_STORAGE_KEY = 'bitcoin-content-display-unit'
+
+type DisplayUnit = 'btc' | 'sats'
 
 const tipHeight = ref<number>(0)
 const blocks = ref<Map<number, BlockData>>(new Map())
@@ -290,20 +404,46 @@ let dragStartY = 0
 let dragStartHeight = 0
 
 const selectedBlock = ref<BlockData | null>(null)
+const selectedBlockLoading = ref(false)
+const selectedBlockError = ref('')
 const networkModalVisible = ref(false)
 const mempoolModalVisible = ref(false)
+const settingsModalVisible = ref(false)
 const mempoolData = ref<MempoolData | null>(null)
 const mempoolLoading = ref(false)
 const newlyMinedBlockDelays = ref<Map<number, number>>(new Map())
+const displayUnit = ref<DisplayUnit>(readStoredDisplayUnit())
 
 let newBlockAnimationTimer: ReturnType<typeof setTimeout> | null = null
+let selectedBlockRequestId = 0
 
-function openModal(block: BlockData) {
+async function openModal(block: BlockData) {
+  const requestId = ++selectedBlockRequestId
   selectedBlock.value = block
+  selectedBlockLoading.value = true
+  selectedBlockError.value = ''
+
+  try {
+    const detail = await fetchBlock(block.height)
+    if (selectedBlock.value?.height === block.height && requestId === selectedBlockRequestId) {
+      selectedBlock.value = { ...block, ...detail }
+    }
+  } catch {
+    if (selectedBlock.value?.height === block.height && requestId === selectedBlockRequestId) {
+      selectedBlockError.value = '상세 정보를 불러오지 못했습니다.'
+    }
+  } finally {
+    if (selectedBlock.value?.height === block.height && requestId === selectedBlockRequestId) {
+      selectedBlockLoading.value = false
+    }
+  }
 }
 
 function closeModal() {
+  selectedBlockRequestId++
   selectedBlock.value = null
+  selectedBlockLoading.value = false
+  selectedBlockError.value = ''
 }
 
 function openNetworkModal() {
@@ -331,6 +471,32 @@ function closeMempoolModal() {
   mempoolData.value = null
 }
 
+function openSettingsModal() {
+  settingsModalVisible.value = true
+}
+
+function closeSettingsModal() {
+  settingsModalVisible.value = false
+}
+
+function setDisplayUnit(unit: DisplayUnit) {
+  displayUnit.value = unit
+  try {
+    window.localStorage.setItem(DISPLAY_UNIT_STORAGE_KEY, unit)
+  } catch {
+    // Ignore storage failures; the in-memory setting still applies.
+  }
+}
+
+function readStoredDisplayUnit(): DisplayUnit {
+  try {
+    const stored = window.localStorage.getItem(DISPLAY_UNIT_STORAGE_KEY)
+    return stored === 'sats' ? 'sats' : 'btc'
+  } catch {
+    return 'btc'
+  }
+}
+
 const nextHalvingHeight = computed(() => {
   return Math.ceil((tipHeight.value + 1) / HALVING_INTERVAL) * HALVING_INTERVAL
 })
@@ -350,6 +516,15 @@ const blocksToDifficulty = computed(() => {
 const currentBlockReward = computed(() => {
   const halvings = Math.floor(tipHeight.value / HALVING_INTERVAL)
   return 50 / Math.pow(2, halvings)
+})
+
+const averageMempoolFeeRate = computed(() => {
+  if (!mempoolData.value || mempoolData.value.bytes <= 0) return 0
+  return (mempoolData.value.total_fee * 100000000) / mempoolData.value.bytes
+})
+
+const selectedTransactions = computed(() => {
+  return selectedBlock.value?.tx_summary ?? []
 })
 
 function formatDuration(minutes: number): string {
@@ -396,12 +571,52 @@ function getBlockReward(height: number): number {
   return 50 / Math.pow(2, halvings)
 }
 
-function formatBTC(satoshi: number | undefined): string {
-  if (satoshi === undefined) {
-    const reward = getBlockReward(selectedBlock.value?.height ?? 0)
-    return reward.toLocaleString('ko-KR', { minimumFractionDigits: 8, maximumFractionDigits: 8 })
+function formatSatoshiAmount(satoshi: number | null | undefined): string {
+  if (satoshi === null || satoshi === undefined) return '---'
+  if (displayUnit.value === 'sats') {
+    return `${Math.round(satoshi).toLocaleString('ko-KR')} sats`
   }
-  return (satoshi / 100000000).toLocaleString('ko-KR', { minimumFractionDigits: 8, maximumFractionDigits: 8 })
+  return `${formatBTCFromSatoshi(satoshi)} BTC`
+}
+
+function formatBTCAmount(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '---'
+  return formatSatoshiAmount(Math.round(value * SATOSHI_PER_BTC))
+}
+
+function formatBTCFromSatoshi(satoshi: number): string {
+  const sign = satoshi < 0 ? '-' : ''
+  const absolute = Math.abs(Math.round(satoshi))
+  const whole = Math.floor(absolute / SATOSHI_PER_BTC).toLocaleString('ko-KR')
+  const fraction = String(absolute % SATOSHI_PER_BTC).padStart(8, '0').replace(/0+$/, '')
+  if (!fraction) return `${sign}${whole}`
+  const groupedFraction = fraction.match(/.{1,4}/g)?.join(' ') ?? fraction
+  return `${sign}${whole}.${groupedFraction}`
+}
+
+function formatBlockSubsidy(block: BlockData): string {
+  if (block.subsidy_satoshi !== undefined) return formatSatoshiAmount(block.subsidy_satoshi)
+  return formatBTCAmount(getBlockReward(block.height))
+}
+
+function formatBlockReward(block: BlockData): string {
+  if (block.reward_satoshi !== undefined) return formatSatoshiAmount(block.reward_satoshi)
+  return formatBlockSubsidy(block)
+}
+
+function blockTxCount(block: BlockData): number {
+  return block.tx_count ?? block.nTx ?? block.tx_summary?.length ?? 0
+}
+
+function formatFeeRate(value: number | undefined): string {
+  if (value === undefined) return '---'
+  return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} sat/vB`
+}
+
+function shortHash(value: string | undefined): string {
+  if (!value) return '---'
+  if (value.length <= 24) return value
+  return `${value.slice(0, 10)}...${value.slice(-10)}`
 }
 
 function formatSize(bytes: number | undefined): string {
@@ -414,6 +629,10 @@ function formatSize(bytes: number | undefined): string {
     unitIndex++
   }
   return `${value.toFixed(2)} ${units[unitIndex]}`
+}
+
+function btcPerKvBToSatPerVByte(value: number): number {
+  return value * 100000
 }
 
 function formatHashrate(hashrate: number | undefined): string {
@@ -540,6 +759,8 @@ function calculateVisibleCount() {
 }
 
 function handleWheel(e: WheelEvent) {
+  if (shouldIgnoreStageWheel(e.target)) return
+
   e.preventDefault()
   const max = maxStartHeight.value
   const delta = Math.round(e.deltaY / 50)
@@ -549,6 +770,11 @@ function handleWheel(e: WheelEvent) {
   throttleTimer = setTimeout(() => {
     fetchVisibleBlocks()
   }, SCROLL_THROTTLE)
+}
+
+function shouldIgnoreStageWheel(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest('.block-modal, .server-widget'))
 }
 
 async function fetchVisibleBlocks() {
@@ -859,19 +1085,6 @@ onBeforeUnmount(() => {
   line-height: 1;
   text-align: right;
   flex-shrink: 0;
-
-  &.top-label {
-    cursor: pointer;
-    padding: 4px 6px;
-    margin: -4px -6px;
-    border-radius: 6px;
-    transition: background 0.2s, color 0.2s;
-
-    &:hover {
-      background: rgba(141, 41, 31, 0.08);
-      color: #8d291f;
-    }
-  }
 }
 
 .scale-marks {
@@ -1014,13 +1227,21 @@ onBeforeUnmount(() => {
 
 .modal-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   background: rgba(255, 253, 248, 0.98);
   border: 1px solid rgba(141, 41, 31, 0.12);
   border-radius: 14px;
   padding: 24px;
-  width: min(380px, calc(100vw - 48px));
+  width: min(480px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
   box-shadow: 0 16px 48px rgba(35, 29, 20, 0.25);
   animation: modal-in 0.25s ease;
+}
+
+.detail-card {
+  height: calc(100vh - 48px);
 }
 
 @keyframes modal-in {
@@ -1059,6 +1280,7 @@ onBeforeUnmount(() => {
 }
 
 .modal-header {
+  flex-shrink: 0;
   font-size: 1.4rem;
   font-weight: 950;
   color: #211d17;
@@ -1068,6 +1290,11 @@ onBeforeUnmount(() => {
 }
 
 .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1092,6 +1319,8 @@ onBeforeUnmount(() => {
 }
 
 .modal-label {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.72rem;
   font-weight: 700;
   color: rgba(33, 29, 23, 0.55);
@@ -1143,6 +1372,114 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.modal-state {
+  padding: 8px 10px;
+  color: rgba(33, 29, 23, 0.62);
+  background: rgba(33, 29, 23, 0.05);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
+
+  &.error {
+    color: #8d291f;
+    background: rgba(141, 41, 31, 0.08);
+  }
+}
+
+.settings-card {
+  width: min(360px, calc(100vw - 48px));
+}
+
+.unit-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.unit-option {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  color: rgba(33, 29, 23, 0.72);
+  background: rgba(33, 29, 23, 0.04);
+  border: 1px solid rgba(33, 29, 23, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+
+  strong {
+    font-size: 0.9rem;
+    font-weight: 950;
+  }
+
+  span {
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+
+  &:hover,
+  &.active {
+    color: #8d291f;
+    background: rgba(141, 41, 31, 0.08);
+    border-color: rgba(141, 41, 31, 0.18);
+  }
+}
+
+.tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 310px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.tx-item {
+  padding: 10px;
+  background: rgba(33, 29, 23, 0.04);
+  border: 1px solid rgba(33, 29, 23, 0.06);
+  border-radius: 9px;
+}
+
+.tx-head,
+.tx-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: rgba(33, 29, 23, 0.56);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.tx-kind {
+  color: #8d291f;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.txid {
+  margin: 6px 0;
+  color: #211d17;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 900;
+  word-break: break-all;
+}
+
+.tx-meta {
+  flex-wrap: wrap;
+}
+
+.tx-note {
+  color: rgba(33, 29, 23, 0.54);
+  font-size: 0.72rem;
+  font-weight: 750;
 }
 
 .modal-badges {

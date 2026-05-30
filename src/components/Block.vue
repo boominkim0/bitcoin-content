@@ -28,15 +28,13 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   select: [block: BlockData]
-  ingSelect: []
 }>()
 
 function handleClick() {
   if (props.isIng) {
-    emit('ingSelect')
-  } else {
-    emit('select', props.block)
+    return
   }
+  emit('select', props.block)
 }
 
 const DIFFICULTY_INTERVAL = 2016
@@ -234,7 +232,13 @@ function cubeDate(value: number): { date: string; time: string } {
   --side: #808080;
   --top: #b8b8b8;
   --ink: #d0d0d0;
+  cursor: default;
   animation: ing-pulse 2.2s ease-in-out infinite;
+
+  &:hover,
+  &:active {
+    transform: translateX(-50%);
+  }
 
   &:before {
     display: block;
