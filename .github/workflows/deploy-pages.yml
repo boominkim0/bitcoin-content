@@ -18,6 +18,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_BTC_API_BASE_URL: ${{ vars.VITE_BTC_API_BASE_URL }}
+      VITE_BTC_API_KEY: ${{ secrets.VITE_BTC_API_KEY }}
 
     steps:
       - name: Checkout
