@@ -1,17 +1,29 @@
 <template>
   <main class="lego-stage" ref="stageRef">
     <div class="blocks-container">
-      <ol 
-        class="block-stack" 
+      <TransitionGroup
+        tag="ol"
+        name="stack"
+        class="block-stack"
         :class="stackClass"
       >
-        <li v-for="block in visibleBlocks" :key="block.height" class="stack-row">
-          <Block :block="block" @select="openModal" />
+        <li
+          v-for="block in visibleBlocks"
+          :key="block.height"
+          class="stack-row"
+          :class="{ 'newly-mined-row': isNewlyMinedBlock(block.height) }"
+          :style="newlyMinedBlockStyle(block.height)"
+        >
+          <Block
+            :block="block"
+            :is-new="isNewlyMinedBlock(block.height)"
+            @select="openModal"
+          />
         </li>
-        <li class="stack-row ing-block">
-          <Block :block="{ height: tipHeight + 1, hash: null, time: null }" is-ing />
+        <li :key="tipHeight + 1" class="stack-row ing-block">
+          <Block :block="{ height: tipHeight + 1, hash: null, time: null }" is-ing @ingSelect="openMempoolModal" />
         </li>
-      </ol>
+      </TransitionGroup>
     </div>
 
     <div class="custom-scrollbar" v-if="tipHeight > 0">
@@ -23,7 +35,7 @@
         ></div>
       </div>
       <div class="scrollbar-scale">
-        <div class="scale-label top-label">#{{ formatNumber(tipHeight) }}</div>
+        <div class="scale-label top-label" @click="openNetworkModal">#{{ formatNumber(tipHeight) }}</div>
         <div class="scale-marks">
           <div
             v-for="mark in scaleMarks"
@@ -41,6 +53,132 @@
     </div>
 
     <div v-if="errorMessage" class="load-state">{{ errorMessage }}</div>
+
+    <div v-if="networkModalVisible" class="block-modal" @click.self="closeNetworkModal">
+      <div class="modal-card">
+        <button class="modal-close" @click="closeNetworkModal">&times;</button>
+        <div class="modal-header">네트워크 현황</div>
+        <div class="modal-body">
+          <div class="modal-section">
+            <div class="modal-section-title">반감기 (Halving)</div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">다음 반감기</span>
+                <span class="modal-value">#{{ formatNumber(nextHalvingHeight) }}</span>
+              </div>
+              <div>
+                <span class="modal-label">남은 블록</span>
+                <span class="modal-value">{{ blocksToHalving.toLocaleString('ko-KR') }} 블록</span>
+              </div>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">예상 남은 시간</span>
+              <span class="modal-value">{{ formatDuration(blocksToHalving * 10) }}</span>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-title">난이도 조정 (Difficulty Adjustment)</div>
+            <div class="modal-row two-col">
+              <div>
+                <span class="modal-label">다음 조정</span>
+                <span class="modal-value">#{{ formatNumber(nextDifficultyHeight) }}</span>
+              </div>
+              <div>
+                <span class="modal-label">남은 블록</span>
+                <span class="modal-value">{{ blocksToDifficulty.toLocaleString('ko-KR') }} 블록</span>
+              </div>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">예상 남은 시간</span>
+              <span class="modal-value">{{ formatDuration(blocksToDifficulty * 10) }}</span>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-title">현재 보상</div>
+            <div class="modal-row">
+              <span class="modal-label">블록 보상</span>
+              <span class="modal-value">{{ currentBlockReward.toLocaleString('ko-KR', { minimumFractionDigits: 8, maximumFractionDigits: 8 }) }} BTC</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="mempoolModalVisible" class="block-modal" @click.self="closeMempoolModal">
+      <div class="modal-card">
+        <button class="modal-close" @click="closeMempoolModal">&times;</button>
+        <div class="modal-header">네트워크 대기열 (Mempool)</div>
+        <div class="modal-body">
+          <div v-if="mempoolLoading" class="tooltip-loading">불러오는 중...</div>
+          <template v-else-if="mempoolData">
+            <div class="modal-section">
+              <div class="modal-section-title">대기 중인 트랜잭션</div>
+              <div class="modal-row two-col">
+                <div>
+                  <span class="modal-label">트랜잭션 수</span>
+                  <span class="modal-value">{{ mempoolData.tx_count.toLocaleString('ko-KR') }} tx</span>
+                </div>
+                <div>
+                  <span class="modal-label">총 크기</span>
+                  <span class="modal-value">{{ formatSize(mempoolData.total_size_bytes) }}</span>
+                </div>
+              </div>
+              <div class="modal-row two-col">
+                <div>
+                  <span class="modal-label">총 수수료</span>
+                  <span class="modal-value">{{ (mempoolData.total_fee_satoshi / 1e8).toLocaleString('ko-KR', { maximumFractionDigits: 8 }) }} BTC</span>
+                </div>
+                <div>
+                  <span class="modal-label">평균 수수료</span>
+                  <span class="modal-value">{{ mempoolData.avg_fee_rate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-title">수수료 범위</div>
+              <div class="modal-row two-col">
+                <div>
+                  <span class="modal-label">최저</span>
+                  <span class="modal-value">{{ mempoolData.min_fee_rate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
+                </div>
+                <div>
+                  <span class="modal-label">최고</span>
+                  <span class="modal-value">{{ mempoolData.max_fee_rate.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) }} sat/vB</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-section">
+              <div class="modal-section-title">권장 수수료 (sat/vB)</div>
+              <div class="modal-row two-col">
+                <div>
+                  <span class="modal-label">즉시 (~10분)</span>
+                  <span class="modal-value">{{ mempoolData.recommended_fees.fastest }}</span>
+                </div>
+                <div>
+                  <span class="modal-label">30분</span>
+                  <span class="modal-value">{{ mempoolData.recommended_fees.half_hour }}</span>
+                </div>
+              </div>
+              <div class="modal-row two-col">
+                <div>
+                  <span class="modal-label">1시간</span>
+                  <span class="modal-value">{{ mempoolData.recommended_fees.hour }}</span>
+                </div>
+                <div>
+                  <span class="modal-label">경제적</span>
+                  <span class="modal-value">{{ mempoolData.recommended_fees.economy }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div v-else class="tooltip-loading">데이터를 불러올 수 없습니다</div>
+        </div>
+      </div>
+    </div>
 
     <div v-if="selectedBlock" class="block-modal" @click.self="closeModal">
       <div class="modal-card">
@@ -126,13 +264,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { fetchBlocks, fetchStatus } from './api'
-import type { BlockData } from './api'
+import { fetchBlocks, fetchStatus, fetchMempool } from './api'
+import type { BlockData, MempoolData } from './api'
 import Block from './components/Block.vue'
 
 const ROW_HEIGHT = 76
 const SCROLL_THROTTLE = 300
 const HALVING_INTERVAL = 210000
+const NEW_BLOCK_ANIMATION_MS = 1200
+const NEW_BLOCK_STAGGER_MS = 160
 
 const tipHeight = ref<number>(0)
 const blocks = ref<Map<number, BlockData>>(new Map())
@@ -150,6 +290,13 @@ let dragStartY = 0
 let dragStartHeight = 0
 
 const selectedBlock = ref<BlockData | null>(null)
+const networkModalVisible = ref(false)
+const mempoolModalVisible = ref(false)
+const mempoolData = ref<MempoolData | null>(null)
+const mempoolLoading = ref(false)
+const newlyMinedBlockDelays = ref<Map<number, number>>(new Map())
+
+let newBlockAnimationTimer: ReturnType<typeof setTimeout> | null = null
 
 function openModal(block: BlockData) {
   selectedBlock.value = block
@@ -157,6 +304,71 @@ function openModal(block: BlockData) {
 
 function closeModal() {
   selectedBlock.value = null
+}
+
+function openNetworkModal() {
+  networkModalVisible.value = true
+}
+
+function closeNetworkModal() {
+  networkModalVisible.value = false
+}
+
+async function openMempoolModal() {
+  mempoolModalVisible.value = true
+  mempoolLoading.value = true
+  try {
+    mempoolData.value = await fetchMempool()
+  } catch {
+    mempoolData.value = null
+  } finally {
+    mempoolLoading.value = false
+  }
+}
+
+function closeMempoolModal() {
+  mempoolModalVisible.value = false
+  mempoolData.value = null
+}
+
+const nextHalvingHeight = computed(() => {
+  return Math.ceil((tipHeight.value + 1) / HALVING_INTERVAL) * HALVING_INTERVAL
+})
+
+const blocksToHalving = computed(() => {
+  return Math.max(0, nextHalvingHeight.value - tipHeight.value)
+})
+
+const nextDifficultyHeight = computed(() => {
+  return Math.ceil((tipHeight.value + 1) / 2016) * 2016
+})
+
+const blocksToDifficulty = computed(() => {
+  return Math.max(0, nextDifficultyHeight.value - tipHeight.value)
+})
+
+const currentBlockReward = computed(() => {
+  const halvings = Math.floor(tipHeight.value / HALVING_INTERVAL)
+  return 50 / Math.pow(2, halvings)
+})
+
+function formatDuration(minutes: number): string {
+  const MINUTES_PER_YEAR = 365 * 24 * 60
+  const MINUTES_PER_MONTH = 30 * 24 * 60
+  const MINUTES_PER_DAY = 24 * 60
+
+  const years = Math.floor(minutes / MINUTES_PER_YEAR)
+  minutes %= MINUTES_PER_YEAR
+  const months = Math.floor(minutes / MINUTES_PER_MONTH)
+  minutes %= MINUTES_PER_MONTH
+  const days = Math.floor(minutes / MINUTES_PER_DAY)
+
+  const parts: string[] = []
+  if (years > 0) parts.push(`${years}년`)
+  if (months > 0) parts.push(`${months}개월`)
+  if (days > 0 || parts.length === 0) parts.push(`${days}일`)
+
+  return parts.join(' ')
 }
 
 function isDifficultyAdjustment(height: number): boolean {
@@ -288,9 +500,36 @@ const stackClass = computed(() => {
       ? 'top-end' 
       : isBottomEnd
       ? 'bottom-end'
-      : ''
+      : '',
+    isTopEnd && newlyMinedBlockDelays.value.size > 0 ? 'mining-update' : ''
   ]
 })
+
+function isNewlyMinedBlock(height: number): boolean {
+  return newlyMinedBlockDelays.value.has(height)
+}
+
+function newlyMinedBlockStyle(height: number): Record<string, string> | undefined {
+  const delay = newlyMinedBlockDelays.value.get(height)
+  if (delay === undefined) return undefined
+  return { '--settle-delay': `${delay}ms` }
+}
+
+function markNewlyMinedBlocks(from: number, to: number) {
+  const animatedFrom = Math.max(from, to - visibleCount.value + 1)
+  const next = new Map(newlyMinedBlockDelays.value)
+  for (let height = animatedFrom; height <= to; height++) {
+    next.set(height, (height - animatedFrom) * NEW_BLOCK_STAGGER_MS)
+  }
+
+  newlyMinedBlockDelays.value = next
+
+  if (newBlockAnimationTimer) clearTimeout(newBlockAnimationTimer)
+  newBlockAnimationTimer = setTimeout(() => {
+    newlyMinedBlockDelays.value = new Map()
+    newBlockAnimationTimer = null
+  }, NEW_BLOCK_ANIMATION_MS + Math.max(0, to - animatedFrom) * NEW_BLOCK_STAGGER_MS)
+}
 
 function calculateVisibleCount() {
   if (containerHeight.value <= 132) {
@@ -423,6 +662,7 @@ async function pollStatus() {
     const oldTip = tipHeight.value
 
     if (newTip > oldTip) {
+      markNewlyMinedBlocks(oldTip + 1, newTip)
       tipHeight.value = newTip
 
       for (let h = oldTip + 1; h <= newTip; h++) {
@@ -461,6 +701,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   if (throttleTimer) clearTimeout(throttleTimer)
   if (pollTimer) clearInterval(pollTimer)
+  if (newBlockAnimationTimer) clearTimeout(newBlockAnimationTimer)
 })
 </script>
 
@@ -514,6 +755,22 @@ onBeforeUnmount(() => {
   &.bottom-end {
     margin-top: -128px;
   }
+
+  &.mining-update {
+    .stack-move,
+    .stack-enter-active,
+    .stack-leave-active {
+      transition:
+        transform 0.74s cubic-bezier(0.18, 0.89, 0.24, 1.08),
+        opacity 0.42s ease;
+    }
+
+    .stack-enter-from,
+    .stack-leave-to {
+      opacity: 0;
+      transform: translateY(-42px) scale(0.96);
+    }
+  }
 }
 
 .stack-row {
@@ -521,6 +778,14 @@ onBeforeUnmount(() => {
   width: min(100%, 560px);
   height: 132px;
   margin-top: -56px;
+}
+
+.newly-mined-row {
+  z-index: 2;
+}
+
+.ing-block {
+  z-index: 3;
 }
 
 .sentinel-row {
@@ -594,6 +859,19 @@ onBeforeUnmount(() => {
   line-height: 1;
   text-align: right;
   flex-shrink: 0;
+
+  &.top-label {
+    cursor: pointer;
+    padding: 4px 6px;
+    margin: -4px -6px;
+    border-radius: 6px;
+    transition: background 0.2s, color 0.2s;
+
+    &:hover {
+      background: rgba(141, 41, 31, 0.08);
+      color: #8d291f;
+    }
+  }
 }
 
 .scale-marks {
@@ -842,6 +1120,29 @@ onBeforeUnmount(() => {
   background: rgba(141, 41, 31, 0.04);
   padding: 8px 10px;
   border-radius: 6px;
+}
+
+.modal-section {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(141, 41, 31, 0.08);
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  &:first-child {
+    padding-top: 0;
+  }
+}
+
+.modal-section-title {
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: rgba(33, 29, 23, 0.7);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .modal-badges {

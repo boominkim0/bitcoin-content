@@ -22,15 +22,19 @@ import type { BlockData } from '../api'
 interface Props {
   block: BlockData
   isIng?: boolean
+  isNew?: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
   select: [block: BlockData]
+  ingSelect: []
 }>()
 
 function handleClick() {
-  if (!props.isIng) {
+  if (props.isIng) {
+    emit('ingSelect')
+  } else {
     emit('select', props.block)
   }
 }
@@ -40,11 +44,15 @@ const HALVING_INTERVAL = 210000
 
 const blockClass = computed(() => {
   if (props.isIng) return 'cube-ing'
-  if (!props.block.time) return ''
-  return {
-    'cube-difficulty': isDifficultyAdjustment(props.block.height),
-    'cube-halving': isHalving(props.block.height)
-  }
+  return [
+    props.isNew ? 'cube-new' : '',
+    props.block.time
+      ? {
+          'cube-difficulty': isDifficultyAdjustment(props.block.height),
+          'cube-halving': isHalving(props.block.height)
+        }
+      : ''
+  ]
 })
 
 function isDifficultyAdjustment(height: number): boolean {
@@ -243,6 +251,78 @@ function cubeDate(value: number): { date: string; time: string } {
     background: #ffcc66;
     animation: ing-dot-blink 1.2s ease-in-out infinite;
     box-shadow: 0 0 8px rgba(255, 204, 102, 0.6);
+  }
+}
+
+.cube-new {
+  animation: block-settle 1.2s cubic-bezier(0.18, 0.89, 0.24, 1.08) both;
+  animation-delay: var(--settle-delay, 0ms);
+
+  &::before {
+    display: block;
+    animation: mined-cap-out 1.2s ease both;
+    animation-delay: var(--settle-delay, 0ms);
+  }
+
+  .cube-front,
+  .cube-side {
+    animation: mined-face-in 1.2s ease both;
+    animation-delay: var(--settle-delay, 0ms);
+  }
+
+  .cube-front strong {
+    animation: mined-number-in 1.2s ease both;
+    animation-delay: var(--settle-delay, 0ms);
+  }
+}
+
+@keyframes block-settle {
+  0% {
+    opacity: 0.72;
+    transform: translateX(-50%) translateY(-54px) scale(1.04);
+  }
+  62% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(6px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes mined-cap-out {
+  0%, 42% {
+    opacity: 1;
+    transform: translateY(0) scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scaleX(0.9);
+  }
+}
+
+@keyframes mined-face-in {
+  0% {
+    filter: grayscale(1) brightness(0.88);
+  }
+  45% {
+    filter: grayscale(0.55) brightness(1.16);
+  }
+  100% {
+    filter: grayscale(0) brightness(1);
+  }
+}
+
+@keyframes mined-number-in {
+  0%, 30% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    text-shadow: 0 0 18px rgba(255, 211, 122, 0.75);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

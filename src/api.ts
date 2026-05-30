@@ -28,6 +28,21 @@ export interface BlocksResponse {
   blocks: BlockData[]
 }
 
+export interface MempoolData {
+  tx_count: number
+  total_size_bytes: number
+  total_fee_satoshi: number
+  avg_fee_rate: number
+  min_fee_rate: number
+  max_fee_rate: number
+  recommended_fees: {
+    fastest: number
+    half_hour: number
+    hour: number
+    economy: number
+  }
+}
+
 async function request<T>(path: string): Promise<T> {
   if (!API_BASE_URL) {
     throw new Error('VITE_BTC_API_BASE_URL이 설정되지 않았습니다.')
@@ -63,4 +78,8 @@ export async function fetchBlock(height: number): Promise<BlockData> {
 export async function fetchBlocks(from: number, to: number): Promise<BlockData[]> {
   const result = await request<BlocksResponse>(`/api/v1/blocks?from=${from}&to=${to}`)
   return Array.isArray(result.blocks) ? result.blocks : []
+}
+
+export async function fetchMempool(): Promise<MempoolData> {
+  return request<MempoolData>('/api/v1/mempool')
 }
