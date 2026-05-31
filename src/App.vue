@@ -402,6 +402,9 @@ let throttleTimer: ReturnType<typeof setTimeout> | null = null
 let isDragging = false
 let dragStartY = 0
 let dragStartHeight = 0
+let touchStartY = 0
+let touchStartHeight = 0
+let touchMoved = false
 
 const selectedBlock = ref<BlockData | null>(null)
 const selectedBlockLoading = ref(false)
@@ -751,10 +754,11 @@ function markNewlyMinedBlocks(from: number, to: number) {
 }
 
 function calculateVisibleCount() {
+  const rowStep = window.innerWidth <= 520 ? 100 : ROW_HEIGHT
   if (containerHeight.value <= 132) {
-    visibleCount.value = 9
+    visibleCount.value = window.innerWidth <= 520 ? 7 : 9
   } else {
-    visibleCount.value = Math.ceil((containerHeight.value - 132) / ROW_HEIGHT) + 2
+    visibleCount.value = Math.ceil((containerHeight.value - 132) / rowStep) + 2
   }
 }
 
@@ -770,6 +774,37 @@ function handleWheel(e: WheelEvent) {
   throttleTimer = setTimeout(() => {
     fetchVisibleBlocks()
   }, SCROLL_THROTTLE)
+}
+
+function handleTouchStart(e: TouchEvent) {
+  if (shouldIgnoreStageWheel(e.target) || e.touches.length !== 1) return
+  touchMoved = false
+  touchStartY = e.touches[0].clientY
+  touchStartHeight = visibleStartHeight.value
+}
+
+function handleTouchMove(e: TouchEvent) {
+  if (shouldIgnoreStageWheel(e.target) || e.touches.length !== 1) return
+
+  const deltaY = touchStartY - e.touches[0].clientY
+  if (Math.abs(deltaY) < 4) return
+
+  e.preventDefault()
+  touchMoved = true
+  const max = maxStartHeight.value
+  const rowStep = window.innerWidth <= 520 ? 100 : ROW_HEIGHT
+  visibleStartHeight.value = Math.max(0, Math.min(max, touchStartHeight - Math.round(deltaY / rowStep)))
+
+  if (throttleTimer) clearTimeout(throttleTimer)
+  throttleTimer = setTimeout(() => {
+    fetchVisibleBlocks()
+  }, SCROLL_THROTTLE)
+}
+
+function handleTouchEnd() {
+  if (!touchMoved) return
+  touchMoved = false
+  fetchVisibleBlocks()
 }
 
 function shouldIgnoreStageWheel(target: EventTarget | null): boolean {
@@ -916,6 +951,9 @@ onMounted(() => {
 
   if (stageRef.value) {
     stageRef.value.addEventListener('wheel', handleWheel, { passive: false })
+    stageRef.value.addEventListener('touchstart', handleTouchStart, { passive: true })
+    stageRef.value.addEventListener('touchmove', handleTouchMove, { passive: false })
+    stageRef.value.addEventListener('touchend', handleTouchEnd)
   }
   window.addEventListener('resize', handleResize)
 })
@@ -923,6 +961,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (stageRef.value) {
     stageRef.value.removeEventListener('wheel', handleWheel)
+    stageRef.value.removeEventListener('touchstart', handleTouchStart)
+    stageRef.value.removeEventListener('touchmove', handleTouchMove)
+    stageRef.value.removeEventListener('touchend', handleTouchEnd)
   }
   window.removeEventListener('resize', handleResize)
   if (throttleTimer) clearTimeout(throttleTimer)
@@ -937,11 +978,14 @@ onBeforeUnmount(() => {
   z-index: 1;
   width: min(760px, 100%);
   height: 100vh;
+  height: 100dvh;
   margin: 0 auto;
   padding: 18px 0 0 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: pan-y;
 }
 
 .blocks-container {
@@ -1204,12 +1248,51 @@ onBeforeUnmount(() => {
 
 @media (max-width: 520px) {
   .lego-stage {
-    padding: 34px 12px 120px;
+    width: 100%;
+    padding: max(18px, env(safe-area-inset-top)) 8px calc(106px + env(safe-area-inset-bottom));
+  }
+
+  .blocks-container {
+    padding: 0 24px 0 4px;
   }
 
   .stack-row {
     height: 114px;
     margin-top: -14px;
+  }
+
+  .block-stack {
+    margin-top: -22px;
+
+    &.top-end {
+      padding-top: 60px;
+    }
+
+    &.bottom-end {
+      margin-top: -96px;
+    }
+  }
+
+  .custom-scrollbar {
+    right: 8px;
+    top: 62px;
+    bottom: calc(112px + env(safe-area-inset-bottom));
+    width: 14px;
+  }
+
+  .scrollbar-scale {
+    display: none;
+  }
+
+  .scrollbar-track {
+    width: 8px;
+    background: rgba(33, 29, 23, 0.1);
+  }
+
+  .scrollbar-thumb {
+    left: 1px;
+    width: 6px;
+    background: rgba(33, 29, 23, 0.34);
   }
 }
 
@@ -1223,6 +1306,7 @@ onBeforeUnmount(() => {
   padding: 24px;
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(2px);
+  touch-action: pan-y;
 }
 
 .modal-card {
@@ -1242,6 +1326,7 @@ onBeforeUnmount(() => {
 
 .detail-card {
   height: calc(100vh - 48px);
+  height: calc(100dvh - 48px);
 }
 
 @keyframes modal-in {
@@ -1294,10 +1379,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding-right: 4px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  touch-action: pan-y;
 }
 
 .modal-row {
@@ -1505,6 +1592,46 @@ onBeforeUnmount(() => {
   &.halving {
     background: rgba(138, 116, 142, 0.14);
     color: #65516a;
+  }
+}
+
+@media (max-width: 520px) {
+  .block-modal {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .modal-card,
+  .settings-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 18px 16px 16px;
+    border-radius: 12px;
+  }
+
+  .detail-card {
+    height: calc(100dvh - 24px);
+  }
+
+  .modal-header {
+    margin-bottom: 12px;
+    padding-right: 36px;
+    font-size: 1.18rem;
+  }
+
+  .modal-row.two-col {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .unit-options {
+    grid-template-columns: 1fr;
+  }
+
+  .tx-list {
+    max-height: none;
   }
 }
 </style>

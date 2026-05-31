@@ -388,4 +388,49 @@ function cubeDate(value: number): { date: string; time: string } {
     }
   }
 }
+
+@media (max-width: 380px) {
+  .cube {
+    width: 310px;
+    height: 86px;
+
+    &::before,
+    &::after {
+      left: -12px;
+      width: 304px;
+      height: 11px;
+    }
+
+    &::before {
+      top: 28px;
+    }
+
+    &::after {
+      top: 90px;
+    }
+
+    &-front {
+      left: 10px;
+      top: 34px;
+      width: 188px;
+      height: 60px;
+
+      strong {
+        max-width: 166px;
+        font-size: 1.32rem;
+      }
+    }
+
+    &-side {
+      top: 34px;
+      width: 112px;
+      height: 60px;
+
+      time {
+        gap: 4px;
+        font-size: 0.56rem;
+      }
+    }
+  }
+}
 </style>

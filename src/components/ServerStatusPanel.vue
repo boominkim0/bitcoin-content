@@ -673,4 +673,35 @@ onBeforeUnmount(() => {
     padding: 12px;
   }
 }
+
+@media (max-width: 520px) {
+  .server-widget {
+    left: 50%;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+  }
+
+  .dock-buttons {
+    gap: 7px;
+    padding: 6px;
+    background: rgba(255, 253, 248, 0.58);
+    border: 1px solid rgba(33, 29, 23, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 12px 34px rgba(35, 29, 20, 0.18);
+    backdrop-filter: blur(10px);
+  }
+
+  .dock-trigger {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+  }
+
+  .server-panel {
+    left: 50%;
+    bottom: 62px;
+    width: min(320px, calc(100vw - 24px));
+    transform: translateX(-50%);
+  }
+}
 </style>
