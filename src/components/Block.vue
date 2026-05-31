@@ -352,8 +352,8 @@ function cubeDate(value: number): { date: string; time: string } {
 
     &::before,
     &::after {
-      left: -16px;
-      width: 340px;
+      left: -20px;
+      width: 390px;
       height: 12px;
     }
 
@@ -396,8 +396,8 @@ function cubeDate(value: number): { date: string; time: string } {
 
     &::before,
     &::after {
-      left: -12px;
-      width: 304px;
+      left: -17px;
+      width: 344px;
       height: 11px;
     }
 

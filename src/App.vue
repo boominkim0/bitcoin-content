@@ -760,7 +760,7 @@ function markNewlyMinedBlocks(from: number, to: number) {
 }
 
 function calculateVisibleCount() {
-  const rowStep = ROW_HEIGHT
+  const rowStep = window.innerWidth <= 520 ? 54 : ROW_HEIGHT
   if (containerHeight.value <= 132) {
     visibleCount.value = window.innerWidth <= 520 ? 7 : 9
   } else {
@@ -798,7 +798,7 @@ function handleTouchMove(e: TouchEvent) {
   e.preventDefault()
   touchMoved = true
   const max = maxStartHeight.value
-  const rowStep = ROW_HEIGHT
+  const rowStep = window.innerWidth <= 520 ? 54 : ROW_HEIGHT
   visibleStartHeight.value = Math.max(0, Math.min(max, touchStartHeight - Math.round(deltaY / rowStep)))
 
   if (throttleTimer) clearTimeout(throttleTimer)
@@ -1296,31 +1296,31 @@ onBeforeUnmount(() => {
   }
 
   .blocks-container {
-    padding: 0 24px 0 4px;
+    padding: 0 48px 0 0;
   }
 
   .stack-row {
-    height: 114px;
-    margin-top: -38px;
+    height: 108px;
+    margin-top: -54px;
   }
 
   .block-stack {
-    margin-top: -16px;
+    margin-top: -10px;
 
     &.top-end {
-      padding-top: 60px;
+      padding-top: 48px;
     }
 
     &.bottom-end {
-      margin-top: -96px;
+      margin-top: -78px;
     }
   }
 
   .custom-scrollbar {
-    right: 2px;
+    right: 0;
     top: 62px;
     bottom: calc(112px + env(safe-area-inset-bottom));
-    width: 34px;
+    width: 52px;
     justify-content: center;
   }
 
@@ -1329,7 +1329,7 @@ onBeforeUnmount(() => {
   }
 
   .scrollbar-track {
-    width: 28px;
+    width: 44px;
     background: transparent;
     touch-action: none;
 
@@ -1339,17 +1339,17 @@ onBeforeUnmount(() => {
       top: 0;
       bottom: 0;
       left: 50%;
-      width: 8px;
-      background: rgba(33, 29, 23, 0.1);
+      width: 14px;
+      background: rgba(33, 29, 23, 0.14);
       border-radius: 999px;
       transform: translateX(-50%);
     }
   }
 
   .scrollbar-thumb {
-    left: calc(50% - 4px);
-    width: 8px;
-    background: rgba(33, 29, 23, 0.34);
+    left: calc(50% - 7px);
+    width: 14px;
+    background: rgba(33, 29, 23, 0.42);
   }
 }
 
