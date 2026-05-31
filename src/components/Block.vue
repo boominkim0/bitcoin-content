@@ -347,13 +347,13 @@ function cubeDate(value: number): { date: string; time: string } {
 
 @media (max-width: 520px) {
   .cube {
-    width: 350px;
+    width: 318px;
     height: 90px;
 
     &::before,
     &::after {
-      left: -20px;
-      width: 390px;
+      left: -12px;
+      width: 342px;
       height: 12px;
     }
 
@@ -366,24 +366,27 @@ function cubeDate(value: number): { date: string; time: string } {
     }
 
     &-front {
-      left: 12px;
-      width: 210px;
+      left: 10px;
+      width: 190px;
       height: 64px;
       top: 36px;
+      padding-top: 3px;
 
       strong {
-        max-width: 188px;
+        max-width: 168px;
         font-size: 1.5rem;
       }
     }
 
     &-side {
-      width: 128px;
+      width: 118px;
       height: 64px;
       top: 36px;
+      padding-top: 3px;
 
       time {
         font-size: 0.62rem;
+        align-content: center;
       }
     }
   }
@@ -391,13 +394,13 @@ function cubeDate(value: number): { date: string; time: string } {
 
 @media (max-width: 380px) {
   .cube {
-    width: 310px;
+    width: 286px;
     height: 86px;
 
     &::before,
     &::after {
-      left: -17px;
-      width: 344px;
+      left: -10px;
+      width: 306px;
       height: 11px;
     }
 
@@ -412,18 +415,18 @@ function cubeDate(value: number): { date: string; time: string } {
     &-front {
       left: 10px;
       top: 34px;
-      width: 188px;
+      width: 172px;
       height: 60px;
 
       strong {
-        max-width: 166px;
+        max-width: 150px;
         font-size: 1.32rem;
       }
     }
 
     &-side {
       top: 34px;
-      width: 112px;
+      width: 104px;
       height: 60px;
 
       time {

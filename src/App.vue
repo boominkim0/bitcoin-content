@@ -59,9 +59,14 @@
     </div>
 
     <div v-if="errorMessage" class="load-state">{{ errorMessage }}</div>
-    <ServerStatusPanel @open-network="openNetworkModal" @open-mempool="openMempoolModal" @open-settings="openSettingsModal" />
+    <ServerStatusPanel
+      @open-server="closeDockModals"
+      @open-network="openNetworkModal"
+      @open-mempool="openMempoolModal"
+      @open-settings="openSettingsModal"
+    />
 
-    <div v-if="networkModalVisible" class="block-modal" @click.self="closeNetworkModal" @wheel.stop>
+    <div v-if="networkModalVisible" class="block-modal dock-modal" @click.self="closeNetworkModal" @wheel.stop>
       <div class="modal-card">
         <button class="modal-close" @click="closeNetworkModal">&times;</button>
         <div class="modal-header">비트코인 네트워크</div>
@@ -127,7 +132,7 @@
       </div>
     </div>
 
-    <div v-if="mempoolModalVisible" class="block-modal" @click.self="closeMempoolModal" @wheel.stop>
+    <div v-if="mempoolModalVisible" class="block-modal dock-modal" @click.self="closeMempoolModal" @wheel.stop>
       <div class="modal-card">
         <button class="modal-close" @click="closeMempoolModal">&times;</button>
         <div class="modal-header">네트워크 대기열 (Mempool)</div>
@@ -201,7 +206,7 @@
       </div>
     </div>
 
-    <div v-if="settingsModalVisible" class="block-modal" @click.self="closeSettingsModal" @wheel.stop>
+    <div v-if="settingsModalVisible" class="block-modal dock-modal" @click.self="closeSettingsModal" @wheel.stop>
       <div class="modal-card settings-card">
         <button class="modal-close" @click="closeSettingsModal">&times;</button>
         <div class="modal-header">표기 설정</div>
@@ -411,6 +416,8 @@ let dragStartHeight = 0
 let touchStartY = 0
 let touchStartHeight = 0
 let touchMoved = false
+let dragFrame: number | null = null
+let pendingDragClientY = 0
 
 const selectedBlock = ref<BlockData | null>(null)
 const selectedBlockLoading = ref(false)
@@ -456,6 +463,8 @@ function closeModal() {
 }
 
 function openNetworkModal() {
+  closeModal()
+  closeDockModals()
   networkModalVisible.value = true
 }
 
@@ -464,6 +473,8 @@ function closeNetworkModal() {
 }
 
 async function openMempoolModal() {
+  closeModal()
+  closeDockModals()
   mempoolModalVisible.value = true
   mempoolLoading.value = true
   try {
@@ -481,11 +492,20 @@ function closeMempoolModal() {
 }
 
 function openSettingsModal() {
+  closeModal()
+  closeDockModals()
   settingsModalVisible.value = true
 }
 
 function closeSettingsModal() {
   settingsModalVisible.value = false
+}
+
+function closeDockModals() {
+  networkModalVisible.value = false
+  mempoolModalVisible.value = false
+  settingsModalVisible.value = false
+  mempoolData.value = null
 }
 
 function setDisplayUnit(unit: DisplayUnit) {
@@ -913,13 +933,27 @@ function handleThumbTouchDrag(e: TouchEvent) {
 
 function updateThumbDrag(clientY: number) {
   if (!isDragging || !trackRef.value) return
+  pendingDragClientY = clientY
+  if (dragFrame !== null) return
+
+  dragFrame = window.requestAnimationFrame(() => {
+    dragFrame = null
+    applyThumbDrag(pendingDragClientY)
+  })
+}
+
+function applyThumbDrag(clientY: number) {
+  if (!isDragging || !trackRef.value) return
   const deltaY = dragStartY - clientY
   const trackH = trackRef.value.clientHeight
   const thumbH = thumbHeight.value
   const maxDragDistance = Math.max(1, trackH - thumbH)
   const ratio = deltaY / maxDragDistance
   const max = maxStartHeight.value
-  visibleStartHeight.value = Math.max(0, Math.min(max, Math.round(dragStartHeight + ratio * max)))
+  const nextHeight = Math.max(0, Math.min(max, Math.round(dragStartHeight + ratio * max)))
+  if (nextHeight !== visibleStartHeight.value) {
+    visibleStartHeight.value = nextHeight
+  }
 }
 
 function handleTrackClick(e: MouseEvent) {
@@ -1012,6 +1046,7 @@ onBeforeUnmount(() => {
   if (throttleTimer) clearTimeout(throttleTimer)
   if (pollTimer) clearInterval(pollTimer)
   if (newBlockAnimationTimer) clearTimeout(newBlockAnimationTimer)
+  if (dragFrame !== null) window.cancelAnimationFrame(dragFrame)
 })
 </script>
 
@@ -1296,7 +1331,7 @@ onBeforeUnmount(() => {
   }
 
   .blocks-container {
-    padding: 0 48px 0 0;
+    padding: 0 58px 0 18px;
   }
 
   .stack-row {
@@ -1364,6 +1399,10 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(2px);
   touch-action: pan-y;
+}
+
+.block-modal.dock-modal {
+  z-index: 20;
 }
 
 .modal-card {
@@ -1658,6 +1697,21 @@ onBeforeUnmount(() => {
     justify-content: center;
     padding: 12px;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .block-modal.dock-modal {
+    align-items: flex-end;
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+    background: rgba(33, 29, 23, 0.1);
+    backdrop-filter: none;
+  }
+
+  .block-modal.dock-modal .modal-card {
+    width: min(320px, calc(100vw - 24px));
+    max-height: min(58dvh, 460px);
+    padding: 14px;
+    border-radius: 16px;
+    box-shadow: 0 18px 42px rgba(35, 29, 20, 0.2);
   }
 
   .modal-card,

@@ -1,5 +1,6 @@
 <template>
   <div class="server-widget" :class="statusClass" aria-live="polite">
+    <div v-if="isOpen" class="widget-shield" @click="closePanel"></div>
     <div class="dock-buttons">
       <button
         class="dock-trigger server-trigger"
@@ -122,6 +123,7 @@ import type { DiskUsageData, MemoryUsageData, ServerStatusData } from '../api'
 const POLL_INTERVAL_MS = 30000
 
 const emit = defineEmits<{
+  'open-server': []
   'open-network': []
   'open-mempool': []
   'open-settings': []
@@ -198,6 +200,7 @@ async function loadStatus() {
 function togglePanel() {
   isOpen.value = !isOpen.value
   if (isOpen.value && !loading.value) {
+    emit('open-server')
     loadStatus()
   }
 }
@@ -280,7 +283,16 @@ onBeforeUnmount(() => {
   z-index: 25;
 }
 
+.widget-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: transparent;
+}
+
 .dock-buttons {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -470,6 +482,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 0;
   bottom: 60px;
+  z-index: 2;
   width: min(286px, calc(100vw - 36px));
   padding: 14px;
   color: #211d17;
