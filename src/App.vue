@@ -27,11 +27,17 @@
     </div>
 
     <div class="custom-scrollbar" v-if="tipHeight > 0">
-      <div class="scrollbar-track" ref="trackRef" @mousedown="handleTrackClick">
+      <div
+        class="scrollbar-track"
+        ref="trackRef"
+        @mousedown="handleTrackClick"
+        @touchstart.prevent.stop="handleTrackTouch"
+      >
         <div
           class="scrollbar-thumb"
           :style="thumbStyle"
-          @mousedown="handleThumbDrag"
+          @mousedown.stop="handleThumbDrag"
+          @touchstart.prevent.stop="handleThumbTouchDrag"
         ></div>
       </div>
       <div class="scrollbar-scale">
@@ -754,7 +760,7 @@ function markNewlyMinedBlocks(from: number, to: number) {
 }
 
 function calculateVisibleCount() {
-  const rowStep = window.innerWidth <= 520 ? 100 : ROW_HEIGHT
+  const rowStep = ROW_HEIGHT
   if (containerHeight.value <= 132) {
     visibleCount.value = window.innerWidth <= 520 ? 7 : 9
   } else {
@@ -792,7 +798,7 @@ function handleTouchMove(e: TouchEvent) {
   e.preventDefault()
   touchMoved = true
   const max = maxStartHeight.value
-  const rowStep = window.innerWidth <= 520 ? 100 : ROW_HEIGHT
+  const rowStep = ROW_HEIGHT
   visibleStartHeight.value = Math.max(0, Math.min(max, touchStartHeight - Math.round(deltaY / rowStep)))
 
   if (throttleTimer) clearTimeout(throttleTimer)
@@ -809,7 +815,7 @@ function handleTouchEnd() {
 
 function shouldIgnoreStageWheel(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
-  return Boolean(target.closest('.block-modal, .server-widget'))
+  return Boolean(target.closest('.block-modal, .server-widget, .custom-scrollbar'))
 }
 
 async function fetchVisibleBlocks() {
@@ -867,15 +873,7 @@ function handleThumbDrag(e: MouseEvent) {
   dragStartY = e.clientY
   dragStartHeight = visibleStartHeight.value
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging || !trackRef.value) return
-    const deltaY = dragStartY - e.clientY
-    const trackH = trackRef.value.clientHeight
-    const thumbH = thumbHeight.value
-    const ratio = deltaY / (trackH - thumbH)
-    const max = maxStartHeight.value
-    visibleStartHeight.value = Math.max(0, Math.min(max, Math.round(dragStartHeight + ratio * max)))
-  }
+  const handleMouseMove = (e: MouseEvent) => updateThumbDrag(e.clientY)
 
   const handleMouseUp = () => {
     isDragging = false
@@ -888,12 +886,57 @@ function handleThumbDrag(e: MouseEvent) {
   window.addEventListener('mouseup', handleMouseUp)
 }
 
+function handleThumbTouchDrag(e: TouchEvent) {
+  if (e.touches.length !== 1) return
+  isDragging = true
+  dragStartY = e.touches[0].clientY
+  dragStartHeight = visibleStartHeight.value
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (e.touches.length !== 1) return
+    e.preventDefault()
+    updateThumbDrag(e.touches[0].clientY)
+  }
+
+  const handleTouchEnd = () => {
+    isDragging = false
+    window.removeEventListener('touchmove', handleTouchMove)
+    window.removeEventListener('touchend', handleTouchEnd)
+    window.removeEventListener('touchcancel', handleTouchEnd)
+    fetchVisibleBlocks()
+  }
+
+  window.addEventListener('touchmove', handleTouchMove, { passive: false })
+  window.addEventListener('touchend', handleTouchEnd)
+  window.addEventListener('touchcancel', handleTouchEnd)
+}
+
+function updateThumbDrag(clientY: number) {
+  if (!isDragging || !trackRef.value) return
+  const deltaY = dragStartY - clientY
+  const trackH = trackRef.value.clientHeight
+  const thumbH = thumbHeight.value
+  const maxDragDistance = Math.max(1, trackH - thumbH)
+  const ratio = deltaY / maxDragDistance
+  const max = maxStartHeight.value
+  visibleStartHeight.value = Math.max(0, Math.min(max, Math.round(dragStartHeight + ratio * max)))
+}
+
 function handleTrackClick(e: MouseEvent) {
+  if (e.target !== trackRef.value) return
+  updateTrackPosition(e.clientY)
+}
+
+function handleTrackTouch(e: TouchEvent) {
+  if (e.touches.length !== 1) return
+  updateTrackPosition(e.touches[0].clientY)
+}
+
+function updateTrackPosition(clientY: number) {
   if (!trackRef.value) return
   const rect = trackRef.value.getBoundingClientRect()
-  const clickY = e.clientY - rect.top
+  const clickY = clientY - rect.top
   const trackH = rect.height
-  const thumbH = thumbHeight.value
   const ratio = 1 - (clickY / trackH)
   const max = maxStartHeight.value
   visibleStartHeight.value = Math.max(0, Math.min(max, Math.round(ratio * max)))
@@ -1258,11 +1301,11 @@ onBeforeUnmount(() => {
 
   .stack-row {
     height: 114px;
-    margin-top: -14px;
+    margin-top: -38px;
   }
 
   .block-stack {
-    margin-top: -22px;
+    margin-top: -16px;
 
     &.top-end {
       padding-top: 60px;
@@ -1274,10 +1317,11 @@ onBeforeUnmount(() => {
   }
 
   .custom-scrollbar {
-    right: 8px;
+    right: 2px;
     top: 62px;
     bottom: calc(112px + env(safe-area-inset-bottom));
-    width: 14px;
+    width: 34px;
+    justify-content: center;
   }
 
   .scrollbar-scale {
@@ -1285,13 +1329,26 @@ onBeforeUnmount(() => {
   }
 
   .scrollbar-track {
-    width: 8px;
-    background: rgba(33, 29, 23, 0.1);
+    width: 28px;
+    background: transparent;
+    touch-action: none;
+
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 8px;
+      background: rgba(33, 29, 23, 0.1);
+      border-radius: 999px;
+      transform: translateX(-50%);
+    }
   }
 
   .scrollbar-thumb {
-    left: 1px;
-    width: 6px;
+    left: calc(50% - 4px);
+    width: 8px;
     background: rgba(33, 29, 23, 0.34);
   }
 }
