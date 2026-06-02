@@ -15,8 +15,12 @@ export function isHalving(height: number): boolean {
   return height > 0 && height % HALVING_INTERVAL === 0
 }
 
+export function getHalvingEpoch(height: number): number {
+  return Math.max(0, Math.floor(height / HALVING_INTERVAL))
+}
+
 export function getBlockReward(height: number): number {
-  const halvings = Math.floor(height / HALVING_INTERVAL)
+  const halvings = getHalvingEpoch(height)
   return 50 / Math.pow(2, halvings)
 }
 

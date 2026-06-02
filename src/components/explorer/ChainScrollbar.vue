@@ -17,6 +17,14 @@
         @touchstart.prevent.stop="handleThumbTouchDrag"
       ></div>
     </div>
+    <div
+      v-if="variant === 'mobile' && scrollbarDragActive"
+      class="scrollbar-bubble"
+      :style="scrollbarBubbleStyle"
+      aria-live="polite"
+    >
+      #{{ formatNumber(scrollbarFocusHeight) }}
+    </div>
     <div v-if="variant === 'desktop'" class="scrollbar-scale">
       <div class="scale-label top-label">#{{ formatNumber(tipHeight) }}</div>
       <div class="scale-marks">
@@ -47,6 +55,9 @@ const props = defineProps<{
 const {
   tipHeight,
   thumbStyle,
+  scrollbarDragActive,
+  scrollbarBubbleStyle,
+  scrollbarFocusHeight,
   scaleMarks,
   setTrackElement,
   handleTrackClick,
@@ -211,6 +222,46 @@ const {
       var(--glass-highlight);
     backdrop-filter: blur(12px) saturate(1.3);
     -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  }
+
+  .scrollbar-bubble {
+    position: absolute;
+    right: 54px;
+    top: 0;
+    min-width: 112px;
+    padding: 8px 10px;
+    color: rgba(255, 253, 246, 0.96);
+    background:
+      linear-gradient(145deg, rgba(45, 73, 64, 0.58), rgba(20, 35, 31, 0.34)),
+      rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: 999px;
+    box-shadow: var(--glass-shadow-soft), var(--glass-highlight);
+    backdrop-filter: blur(18px) saturate(1.35);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    font-size: 0.86rem;
+    font-weight: 950;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: center;
+    pointer-events: none;
+    white-space: nowrap;
+
+    &::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -6px;
+      width: 11px;
+      height: 11px;
+      background: rgba(36, 61, 54, 0.46);
+      border-top: 1px solid rgba(255, 255, 255, 0.36);
+      border-right: 1px solid rgba(255, 255, 255, 0.36);
+      transform: translateY(-50%) rotate(45deg);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
   }
 }
 </style>

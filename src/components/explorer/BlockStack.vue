@@ -111,6 +111,11 @@ function selectBlock(block: Parameters<typeof openModal>[0]) {
   width: min(100%, 560px);
   height: 132px;
   margin-top: -56px;
+  pointer-events: none;
+
+  :deep(.cube) {
+    pointer-events: auto;
+  }
 }
 
 .newly-mined-row {

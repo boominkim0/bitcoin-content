@@ -2,6 +2,8 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 export type DeviceKind = 'mobile' | 'desktop'
 
+const TEMP_FORCE_MOBILE_UI = true
+
 interface NavigatorWithUAData extends Navigator {
   userAgentData?: {
     mobile?: boolean
@@ -35,6 +37,8 @@ export function useDeviceKind() {
 }
 
 function detectDeviceKind(): DeviceKind {
+  if (TEMP_FORCE_MOBILE_UI) return 'mobile'
+
   const queryOverride = readDeviceQueryOverride()
   if (queryOverride) return queryOverride
 

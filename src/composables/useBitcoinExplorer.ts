@@ -21,6 +21,7 @@ import {
   formatSatoshiAmount as formatSatoshiAmountWithUnit,
   formatSize,
   formatTimeDisplayModeLabel,
+  getHalvingEpoch,
   isDifficultyAdjustment,
   isHalving,
   shortHash
@@ -71,6 +72,10 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   const mempoolData = ref<MempoolData | null>(null)
   const mempoolLoading = ref(false)
   const newlyMinedBlockDelays = ref<Map<number, number>>(new Map())
+  const scrollbarDragActive = ref(false)
+  const halvingEraToastVisible = ref(false)
+  const halvingEraToastTitle = ref('')
+  const halvingEraToastDescription = ref('')
   const displayUnit = ref<DisplayUnit>(readStoredDisplayUnit())
   const timeDisplayMode = ref<TimeDisplayMode>(readStoredTimeDisplayMode())
 
@@ -83,7 +88,10 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   let touchMoved = false
   let dragFrame: number | null = null
   let pendingDragClientY = 0
+  let pendingDragClientX = 0
   let newBlockAnimationTimer: ReturnType<typeof setTimeout> | null = null
+  let halvingEraToastTimer: ReturnType<typeof setTimeout> | null = null
+  let lastVisibleHalvingEpoch: number | null = null
   let selectedBlockRequestId = 0
   let transactionHistoryRequestId = 0
   let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -161,16 +169,37 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     return Math.max(deviceKind.value === 'mobile' ? 48 : 40, ratio * trackHeight.value)
   })
 
-  const thumbStyle = computed(() => {
+  const thumbTop = computed(() => {
     const max = maxStartHeight.value
-    if (max === 0 || trackHeight.value === 0) return { display: 'none' }
+    if (max === 0 || trackHeight.value === 0) return null
     const ratio = 1 - (visibleStartHeight.value / max)
-    const top = ratio * (trackHeight.value - thumbHeight.value)
+    return ratio * (trackHeight.value - thumbHeight.value)
+  })
+
+  const thumbStyle = computed(() => {
+    if (thumbTop.value === null) return { display: 'none' }
     return {
       height: `${thumbHeight.value}px`,
-      transform: `translateY(${top}px)`
+      transform: `translateY(${thumbTop.value}px)`
     }
   })
+
+  const scrollbarBubbleStyle = computed(() => {
+    if (thumbTop.value === null) return { display: 'none' }
+    const center = thumbTop.value + thumbHeight.value / 2
+    return {
+      transform: `translateY(${center}px) translateY(-50%)`
+    }
+  })
+
+  const scrollbarFocusHeight = computed(() => {
+    return Math.min(
+      tipHeight.value,
+      Math.max(0, visibleStartHeight.value + Math.floor(visibleCount.value / 2))
+    )
+  })
+
+  const visibleHalvingEpoch = computed(() => getHalvingEpoch(scrollbarFocusHeight.value))
 
   const scaleMarks = computed(() => {
     const total = tipHeight.value
@@ -562,13 +591,15 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   function handleThumbDrag(e: MouseEvent) {
     e.preventDefault()
     isDragging = true
+    scrollbarDragActive.value = true
     dragStartY = e.clientY
     dragStartHeight = visibleStartHeight.value
 
-    const handleMouseMove = (e: MouseEvent) => updateThumbDrag(e.clientY)
+    const handleMouseMove = (e: MouseEvent) => updateThumbDrag(e.clientY, e.clientX)
 
     const handleMouseUp = () => {
       isDragging = false
+      scrollbarDragActive.value = false
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
       fetchVisibleBlocks()
@@ -581,17 +612,19 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   function handleThumbTouchDrag(e: TouchEvent) {
     if (e.touches.length !== 1) return
     isDragging = true
+    scrollbarDragActive.value = true
     dragStartY = e.touches[0].clientY
     dragStartHeight = visibleStartHeight.value
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length !== 1) return
       e.preventDefault()
-      updateThumbDrag(e.touches[0].clientY)
+      updateThumbDrag(e.touches[0].clientY, e.touches[0].clientX)
     }
 
     const handleTouchEnd = () => {
       isDragging = false
+      scrollbarDragActive.value = false
       window.removeEventListener('touchmove', handleTouchMove)
       window.removeEventListener('touchend', handleTouchEnd)
       window.removeEventListener('touchcancel', handleTouchEnd)
@@ -653,24 +686,26 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     }
   }
 
-  function updateThumbDrag(clientY: number) {
+  function updateThumbDrag(clientY: number, clientX = 0) {
     if (!isDragging || !trackRef.value) return
     pendingDragClientY = clientY
+    pendingDragClientX = clientX
     if (dragFrame !== null) return
 
     dragFrame = window.requestAnimationFrame(() => {
       dragFrame = null
-      applyThumbDrag(pendingDragClientY)
+      applyThumbDrag(pendingDragClientY, pendingDragClientX)
     })
   }
 
-  function applyThumbDrag(clientY: number) {
+  function applyThumbDrag(clientY: number, clientX: number) {
     if (!isDragging || !trackRef.value) return
     const deltaY = dragStartY - clientY
+    const dragScale = getThumbDragScale(deltaY, clientX)
     const trackH = trackRef.value.clientHeight
     const thumbH = thumbHeight.value
     const maxDragDistance = Math.max(1, trackH - thumbH)
-    const ratio = deltaY / maxDragDistance
+    const ratio = (deltaY * dragScale) / maxDragDistance
     const max = maxStartHeight.value
     const nextHeight = Math.max(0, Math.min(max, Math.round(dragStartHeight + ratio * max)))
     if (nextHeight !== visibleStartHeight.value) {
@@ -706,6 +741,49 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     return deviceKind.value === 'mobile' ? MOBILE_ROW_HEIGHT : DESKTOP_ROW_HEIGHT
   }
 
+  function getThumbDragScale(deltaY: number, clientX: number) {
+    if (deviceKind.value !== 'mobile' || !trackRef.value) return 1
+
+    const absY = Math.abs(deltaY)
+    const movementRatio = Math.min(1, Math.max(0, (absY - 4) / 170))
+    const movementScale = 0.012 + 0.988 * Math.pow(movementRatio, 1.75)
+    const rect = trackRef.value.getBoundingClientRect()
+    const trackCenterX = rect.left + rect.width / 2
+    const pullDistance = Math.max(0, trackCenterX - clientX)
+    const pullPrecision = pullDistance >= 118
+      ? 0.1
+      : pullDistance >= 72
+        ? 0.22
+        : pullDistance >= 34
+          ? 0.46
+          : 1
+
+    return Math.max(0.004, movementScale * pullPrecision)
+  }
+
+  function showHalvingEraToast(epoch: number) {
+    halvingEraToastTitle.value = epoch === 0
+      ? '초기 발행 구간에 진입했습니다'
+      : `${epoch}차 반감기 구간에 진입했습니다`
+    halvingEraToastDescription.value = getHalvingEraDescription(epoch)
+    halvingEraToastVisible.value = true
+
+    if (halvingEraToastTimer) clearTimeout(halvingEraToastTimer)
+    halvingEraToastTimer = setTimeout(() => {
+      halvingEraToastVisible.value = false
+      halvingEraToastTimer = null
+    }, 2400)
+  }
+
+  function getHalvingEraDescription(epoch: number) {
+    const start = epoch * HALVING_INTERVAL
+    const end = (epoch + 1) * HALVING_INTERVAL - 1
+    const reward = 50 / Math.pow(2, epoch)
+    return epoch === 0
+      ? `#0 - #${formatNumber(end)} · 보조금 ${formatBTCAmount(reward)}`
+      : `#${formatNumber(start)} - #${formatNumber(end)} · 보조금 ${formatBTCAmount(reward)}`
+  }
+
   function getViewportHeight() {
     return typeof window === 'undefined' ? 0 : window.innerHeight
   }
@@ -732,60 +810,30 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   }
 
   function unlockBlockSound() {
+    if (audioUnlocked) return
+
     const context = getAudioContext()
     const sound = getBlockSoundElement()
-    if ((!context && !sound) || audioUnlocked) return
+    if (!context && !sound) return
 
-    const finishUnlock = () => {
-      unlockBlockSoundFile(sound)
-      if (!context) {
-        audioUnlocked = true
-        return
-      }
-
-      const gain = context.createGain()
-      const oscillator = context.createOscillator()
-      gain.gain.setValueAtTime(0.0001, context.currentTime)
-      oscillator.connect(gain)
-      gain.connect(context.destination)
-      oscillator.start()
-      oscillator.stop(context.currentTime + 0.01)
-      oscillator.onended = () => {
-        oscillator.disconnect()
-        gain.disconnect()
-      }
-      audioUnlocked = true
-    }
-
+    sound?.load()
     if (!context) {
-      finishUnlock()
+      audioUnlocked = true
       return
     }
 
+    const markUnlocked = () => {
+      audioUnlocked = true
+    }
+
     if (context.state === 'suspended') {
-      context.resume().then(finishUnlock).catch(() => {
+      context.resume().then(markUnlocked).catch(() => {
         // The next user gesture can try again.
       })
       return
     }
 
-    finishUnlock()
-  }
-
-  function unlockBlockSoundFile(sound: HTMLAudioElement | null) {
-    if (!sound) return
-    const previousVolume = sound.volume
-    sound.volume = 0
-    sound.currentTime = 0
-    sound.play()
-      .then(() => {
-        sound.pause()
-        sound.currentTime = 0
-        sound.volume = previousVolume
-      })
-      .catch(() => {
-        sound.volume = previousVolume
-      })
+    markUnlocked()
   }
 
   function playNewBlockSound(blockCount: number) {
@@ -901,6 +949,22 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     fetchVisibleBlocks()
   })
 
+  watch(visibleHalvingEpoch, (epoch) => {
+    if (initialLoading.value) {
+      lastVisibleHalvingEpoch = epoch
+      return
+    }
+
+    if (lastVisibleHalvingEpoch === null) {
+      lastVisibleHalvingEpoch = epoch
+      return
+    }
+
+    if (epoch === lastVisibleHalvingEpoch) return
+    lastVisibleHalvingEpoch = epoch
+    showHalvingEraToast(epoch)
+  })
+
   onBeforeUnmount(() => {
     window.removeEventListener('resize', handleResize)
     window.removeEventListener('pointerdown', unlockBlockSound)
@@ -909,6 +973,7 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     if (throttleTimer) clearTimeout(throttleTimer)
     if (pollTimer) clearInterval(pollTimer)
     if (newBlockAnimationTimer) clearTimeout(newBlockAnimationTimer)
+    if (halvingEraToastTimer) clearTimeout(halvingEraToastTimer)
     if (dragFrame !== null) window.cancelAnimationFrame(dragFrame)
     if (audioContext) {
       audioContext.close().catch(() => {
@@ -923,6 +988,12 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     visibleCount,
     initialLoading,
     errorMessage,
+    scrollbarDragActive,
+    scrollbarBubbleStyle,
+    scrollbarFocusHeight,
+    halvingEraToastVisible,
+    halvingEraToastTitle,
+    halvingEraToastDescription,
     selectedBlock,
     selectedBlockLoading,
     selectedBlockError,

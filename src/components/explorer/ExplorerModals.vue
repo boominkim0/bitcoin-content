@@ -33,6 +33,11 @@
             <small>채굴 대기 중</small>
           </div>
           <div class="metric-tile">
+            <span class="modal-label">현재 반감기</span>
+            <strong>{{ currentHalvingLabel }}</strong>
+            <small>{{ currentHalvingDescription }}</small>
+          </div>
+          <div class="metric-tile">
             <span class="modal-label">현재 보상</span>
             <strong>{{ formatBTCAmount(currentBlockReward) }}</strong>
             <small>블록마다 새로 발행</small>
@@ -548,6 +553,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import InfoTip from '@/components/InfoTip.vue'
 import type { DeviceKind } from '@/composables/useDeviceKind'
 import type { BitcoinExplorerController } from '@/composables/useBitcoinExplorer'
+import { getHalvingEpoch, HALVING_INTERVAL } from '@/domain/bitcoin'
 
 const props = defineProps<{
   explorer: BitcoinExplorerController
@@ -617,6 +623,20 @@ const hasMoreTransactions = computed(() => {
     return blockTxCount(selectedBlock.value) > DETAIL_TRANSACTION_PREVIEW_LIMIT
   }
   return selectedTransactions.value.length > DETAIL_TRANSACTION_PREVIEW_LIMIT
+})
+
+const currentHalvingEpoch = computed(() => getHalvingEpoch(tipHeight.value))
+
+const currentHalvingLabel = computed(() => {
+  return currentHalvingEpoch.value === 0 ? '초기 발행' : `${currentHalvingEpoch.value}차`
+})
+
+const currentHalvingDescription = computed(() => {
+  if (currentHalvingEpoch.value === 0) {
+    return '첫 반감기 전 구간'
+  }
+
+  return `#${formatNumber(currentHalvingEpoch.value * HALVING_INTERVAL)}부터 적용`
 })
 
 function closeBlockDetail() {

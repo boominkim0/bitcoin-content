@@ -8,6 +8,25 @@
         <span></span>
       </span>
       <strong v-else>#{{ formatNumber(props.block.height) }}</strong>
+      <span
+        v-if="showHalvingEra"
+        class="halving-era"
+        :class="{ 'halving-era-visible': isHalvingTooltipVisible }"
+        :aria-label="halvingEraLabel"
+        :data-tooltip="halvingEraTooltip"
+        tabindex="0"
+        @pointerenter="showHalvingTooltip"
+        @pointerleave="hideHalvingTooltipFromPointer"
+        @pointerdown.stop="showHalvingTooltip"
+        @touchstart.stop="showHalvingTooltip"
+        @focus="showHalvingTooltip"
+        @blur="hideHalvingTooltip"
+        @keydown.enter.prevent.stop="showHalvingTooltip"
+        @keydown.space.prevent.stop="showHalvingTooltip"
+        @click.stop="showHalvingTooltip"
+      >
+        {{ halvingEpoch }}차
+      </span>
     </div>
     <div class="cube-side">
       <time v-if="props.isSkeleton" class="skeleton-time">
@@ -25,9 +44,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { BlockData } from '../api'
-import { formatBlockTimeParts, formatNumber, isDifficultyAdjustment, isHalving } from '../domain/bitcoin'
+import { formatBlockTimeParts, formatNumber, getHalvingEpoch, isDifficultyAdjustment, isHalving } from '../domain/bitcoin'
 import type { TimeDisplayMode } from '../domain/bitcoin'
 
 interface Props {
@@ -46,12 +65,28 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   select: [block: BlockData]
 }>()
+const isHalvingTooltipVisible = ref(false)
 
 function handleClick() {
   if (props.isIng || props.isSkeleton) {
     return
   }
   emit('select', props.block)
+}
+
+function showHalvingTooltip() {
+  isHalvingTooltipVisible.value = true
+}
+
+function hideHalvingTooltip() {
+  isHalvingTooltipVisible.value = false
+}
+
+function hideHalvingTooltipFromPointer(event: PointerEvent) {
+  if (event.pointerType === 'touch') {
+    return
+  }
+  hideHalvingTooltip()
 }
 
 const blockClass = computed(() => {
@@ -68,6 +103,13 @@ const blockClass = computed(() => {
         }
       : ''
   ]
+})
+
+const halvingEpoch = computed(() => getHalvingEpoch(props.block.height))
+const showHalvingEra = computed(() => !props.isSkeleton && !props.isIng && halvingEpoch.value > 0)
+const halvingEraLabel = computed(() => `${halvingEpoch.value}번째 반감기 이후 블록`)
+const halvingEraTooltip = computed(() => {
+  return `${halvingEpoch.value}차 반감기 이후 구간입니다. 반감기가 지날 때마다 새로 발행되는 보조금이 절반으로 줄어듭니다.`
 })
 
 function cubeDate(value: number): { date: string; time: string } {
@@ -207,23 +249,95 @@ function cubeDate(value: number): { date: string; time: string } {
 }
 
 .cube-difficulty {
-  --front: rgba(88, 139, 125, 0.78);
-  --side: rgba(55, 94, 82, 0.86);
-  --top: rgba(162, 196, 185, 0.82);
-  --ink: #f4fff8;
+  --line: rgba(255, 255, 255, 0.26);
 }
 
 .cube-halving {
-  --front: rgba(126, 118, 158, 0.78);
-  --side: rgba(87, 80, 119, 0.86);
-  --top: rgba(189, 178, 212, 0.82);
-  --ink: #fffdf8;
+  --line: rgba(255, 236, 174, 0.4);
+
+  .cube-front,
+  .cube-side {
+    border-color: rgba(255, 236, 174, 0.52);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 -7px 0 rgba(23, 35, 31, 0.08),
+      0 0 22px rgba(213, 171, 85, 0.24);
+  }
 }
 
-.cube-difficulty.cube-halving {
-  --front: rgba(155, 127, 90, 0.8);
-  --side: rgba(107, 81, 55, 0.86);
-  --top: rgba(205, 180, 132, 0.82);
+.halving-era {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 18px;
+  padding: 0 6px;
+  overflow: visible;
+  color: rgba(255, 252, 238, 0.94);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(213, 171, 85, 0.16)),
+    rgba(40, 53, 46, 0.3);
+  border: 1px solid rgba(255, 236, 174, 0.34);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    0 7px 14px rgba(20, 31, 28, 0.12);
+  font-size: 0.58rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow: 0 1px 2px rgba(20, 31, 28, 0.36);
+  pointer-events: auto;
+  cursor: help;
+  outline: none;
+  z-index: 6;
+
+  &::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    z-index: 10;
+    width: max-content;
+    max-width: min(230px, calc(100vw - 116px));
+    padding: 9px 10px;
+    color: rgba(255, 253, 246, 0.94);
+    background:
+      linear-gradient(145deg, rgba(37, 62, 55, 0.66), rgba(20, 35, 31, 0.42)),
+      rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 10px;
+    box-shadow: var(--glass-shadow-soft), var(--glass-highlight);
+    backdrop-filter: blur(18px) saturate(1.35);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    transform-origin: top left;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+    pointer-events: none;
+  }
+
+  &:hover,
+  &:focus,
+  &:focus-visible,
+  &.halving-era-visible {
+    border-color: rgba(255, 236, 174, 0.58);
+  }
+
+  &:hover::after,
+  &:focus::after,
+  &:focus-visible::after,
+  &.halving-era-visible::after {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .cube-ing {
@@ -455,6 +569,13 @@ function cubeDate(value: number): { date: string; time: string } {
     }
   }
 
+  .halving-era {
+    left: 12px;
+    top: 9px;
+    min-width: 28px;
+    height: 18px;
+  }
+
   .cube-side {
     top: 12px;
     right: 0;
@@ -476,16 +597,6 @@ function cubeDate(value: number): { date: string; time: string } {
       font-size: 0.66rem;
       align-content: center;
     }
-  }
-
-  &.cube-difficulty {
-    --front: rgba(92, 151, 135, 0.74);
-    --side: rgba(57, 103, 90, 0.82);
-  }
-
-  &.cube-halving {
-    --front: rgba(128, 120, 164, 0.74);
-    --side: rgba(89, 82, 126, 0.82);
   }
 
   &.cube-ing {
