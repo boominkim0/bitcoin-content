@@ -1,5 +1,5 @@
 <template>
-  <div class="server-widget" :class="statusClass" aria-live="polite">
+  <div class="server-widget" :class="[statusClass, `server-widget-${variant}`]" aria-live="polite">
     <div v-if="isOpen" class="widget-shield" @click="closePanel"></div>
     <div class="dock-buttons">
       <button
@@ -18,14 +18,6 @@
       </button>
       <button class="dock-trigger network-trigger" type="button" aria-label="비트코인 네트워크 보기" @click="openNetworkPanel">
         <span class="network-icon" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </span>
-      </button>
-      <button class="dock-trigger mempool-trigger" type="button" aria-label="Mempool 보기" @click="openMempoolPanel">
-        <span class="mempool-icon" aria-hidden="true">
-          <span></span>
           <span></span>
           <span></span>
           <span></span>
@@ -58,7 +50,16 @@
 
         <div class="server-clock">{{ serverTimeLabel }}</div>
 
-        <div v-if="loading && !status" class="panel-muted">상태 확인 중...</div>
+        <div v-if="loading && !status" class="server-skeleton-panel" aria-label="서버 상태 확인 중">
+          <span class="server-skeleton-line wide"></span>
+          <span class="server-skeleton-meter"></span>
+          <span class="server-skeleton-line"></span>
+          <span class="server-skeleton-meter"></span>
+          <div class="server-skeleton-grid">
+            <span></span>
+            <span></span>
+          </div>
+        </div>
         <template v-else-if="status">
           <div class="metric-row">
             <div>
@@ -122,10 +123,13 @@ import type { DiskUsageData, MemoryUsageData, ServerStatusData } from '../api'
 
 const POLL_INTERVAL_MS = 30000
 
+const { variant = 'desktop' } = defineProps<{
+  variant?: 'desktop' | 'mobile'
+}>()
+
 const emit = defineEmits<{
   'open-server': []
   'open-network': []
-  'open-mempool': []
   'open-settings': []
 }>()
 
@@ -214,11 +218,6 @@ function openNetworkPanel() {
   emit('open-network')
 }
 
-function openMempoolPanel() {
-  isOpen.value = false
-  emit('open-mempool')
-}
-
 function openSettingsPanel() {
   isOpen.value = false
   emit('open-settings')
@@ -305,24 +304,27 @@ onBeforeUnmount(() => {
   width: 48px;
   height: 48px;
   padding: 0;
-  color: #fff5d5;
+  color: rgba(255, 253, 246, 0.94);
   background:
-    linear-gradient(180deg, rgba(255, 245, 213, 0.14), rgba(0, 0, 0, 0.16)),
-    rgba(33, 29, 23, 0.9);
-  border: 1px solid rgba(255, 245, 213, 0.24);
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.46), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(21, 38, 34, 0.18)),
+    rgba(35, 58, 52, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.36);
   border-radius: 15px;
   box-shadow:
-    0 14px 32px rgba(35, 29, 20, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    var(--glass-shadow-soft),
+    var(--glass-highlight);
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 
   &:hover {
     transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.56);
     box-shadow:
-      0 18px 38px rgba(35, 29, 20, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      0 18px 42px rgba(20, 31, 28, 0.22),
+      var(--glass-highlight);
   }
 
   &:active {
@@ -341,22 +343,17 @@ onBeforeUnmount(() => {
 .network-trigger {
   color: #f4fff8;
   background:
-    linear-gradient(180deg, rgba(255, 245, 213, 0.12), rgba(0, 0, 0, 0.14)),
-    rgba(79, 104, 98, 0.92);
-}
-
-.mempool-trigger {
-  color: #fffdf8;
-  background:
-    linear-gradient(180deg, rgba(255, 245, 213, 0.12), rgba(0, 0, 0, 0.14)),
-    rgba(112, 77, 64, 0.92);
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.42), transparent 35%),
+    linear-gradient(180deg, rgba(142, 185, 177, 0.24), rgba(25, 70, 58, 0.2)),
+    rgba(49, 93, 80, 0.5);
 }
 
 .settings-trigger {
-  color: #fff5d5;
+  color: #fff9e8;
   background:
-    linear-gradient(180deg, rgba(255, 245, 213, 0.12), rgba(0, 0, 0, 0.14)),
-    rgba(75, 68, 56, 0.92);
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.42), transparent 35%),
+    linear-gradient(180deg, rgba(213, 171, 85, 0.24), rgba(72, 62, 44, 0.2)),
+    rgba(83, 72, 53, 0.5);
 }
 
 .server-icon {
@@ -426,21 +423,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.mempool-icon {
-  display: grid;
-  grid-template-columns: repeat(2, 9px);
-  gap: 4px;
-
-  span {
-    display: block;
-    width: 9px;
-    height: 9px;
-    background: currentColor;
-    border-radius: 3px;
-    box-shadow: inset 0 -2px 0 rgba(33, 29, 23, 0.18);
-  }
-}
-
 .settings-icon {
   display: grid;
   gap: 5px;
@@ -485,12 +467,15 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: min(286px, calc(100vw - 36px));
   padding: 14px;
-  color: #211d17;
-  background: rgba(255, 253, 248, 0.9);
-  border: 1px solid rgba(141, 41, 31, 0.16);
+  color: var(--ink);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.6), rgba(236, 246, 241, 0.36)),
+    rgba(255, 253, 246, 0.42);
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
-  box-shadow: 0 18px 42px rgba(35, 29, 20, 0.2);
-  backdrop-filter: blur(10px);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(1.35);
+  -webkit-backdrop-filter: blur(24px) saturate(1.35);
 }
 
 .server-popover-enter-active,
@@ -524,7 +509,7 @@ onBeforeUnmount(() => {
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(33, 29, 23, 0.52);
+  color: var(--ink-muted);
 }
 
 .panel-title {
@@ -538,9 +523,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 9px;
-  color: #315b3d;
-  background: rgba(73, 143, 90, 0.12);
-  border: 1px solid rgba(73, 143, 90, 0.18);
+  color: #214f3e;
+  background: rgba(120, 183, 145, 0.18);
+  border: 1px solid rgba(120, 183, 145, 0.26);
   border-radius: 999px;
   font: inherit;
   font-size: 0.72rem;
@@ -558,9 +543,9 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   padding: 0;
-  color: rgba(33, 29, 23, 0.52);
-  background: rgba(33, 29, 23, 0.06);
-  border: 0;
+  color: rgba(23, 35, 31, 0.56);
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 9px;
   font-size: 1.2rem;
   line-height: 1;
@@ -568,8 +553,8 @@ onBeforeUnmount(() => {
   transition: background 0.15s, color 0.15s;
 
   &:hover {
-    color: #8d291f;
-    background: rgba(141, 41, 31, 0.1);
+    color: var(--danger);
+    background: rgba(255, 255, 255, 0.46);
   }
 }
 
@@ -604,8 +589,11 @@ onBeforeUnmount(() => {
 .server-clock {
   margin: 10px 0 12px;
   padding: 8px 10px;
-  color: #fff5d5;
-  background: rgba(33, 29, 23, 0.86);
+  color: #f9fff8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.04)),
+    rgba(25, 50, 43, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.82rem;
@@ -638,20 +626,20 @@ onBeforeUnmount(() => {
   height: 7px;
   margin-top: 6px;
   overflow: hidden;
-  background: rgba(33, 29, 23, 0.1);
+  background: rgba(23, 35, 31, 0.1);
   border-radius: 999px;
 
   span {
     display: block;
     height: 100%;
-    background: linear-gradient(90deg, #6f8b84, #b6a15f);
+    background: linear-gradient(90deg, var(--celadon), var(--amber));
     border-radius: inherit;
     transition: width 0.35s ease;
   }
 }
 
 .disk-meter span {
-  background: linear-gradient(90deg, #8a748e, #9a7460);
+  background: linear-gradient(90deg, #8f9fbd, var(--stone-warm));
 }
 
 .panel-foot {
@@ -668,52 +656,151 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-@media (max-width: 520px) {
-  .server-widget {
-    left: 12px;
-    bottom: 12px;
-  }
+.server-skeleton-panel {
+  display: grid;
+  gap: 9px;
+  padding: 10px 0 2px;
+}
 
-  .dock-trigger {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-  }
+.server-skeleton-line,
+.server-skeleton-meter,
+.server-skeleton-grid span {
+  display: block;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.44), transparent),
+    rgba(33, 29, 23, 0.08);
+  background-size: 220% 100%, 100% 100%;
+  border-radius: 999px;
+  animation: server-skeleton-sweep 1.35s ease-in-out infinite;
+}
 
-  .server-panel {
-    bottom: 56px;
-    width: min(268px, calc(100vw - 24px));
-    padding: 12px;
+.server-skeleton-line {
+  width: 56%;
+  height: 12px;
+
+  &.wide {
+    width: 78%;
   }
 }
 
-@media (max-width: 520px) {
-  .server-widget {
-    left: 50%;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
+.server-skeleton-meter {
+  height: 7px;
+}
+
+.server-skeleton-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+
+  span {
+    height: 44px;
+    border-radius: 10px;
+  }
+}
+
+@keyframes server-skeleton-sweep {
+  0% { background-position: 220% 0, 0 0; }
+  100% { background-position: -220% 0, 0 0; }
+}
+
+.server-widget-mobile {
+  left: 0;
+  right: 0;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+
+  .widget-shield {
+    z-index: 1;
+    pointer-events: auto;
   }
 
   .dock-buttons {
-    gap: 7px;
-    padding: 6px;
-    background: rgba(255, 253, 248, 0.58);
-    border: 1px solid rgba(33, 29, 23, 0.08);
-    border-radius: 16px;
-    box-shadow: 0 12px 34px rgba(35, 29, 20, 0.18);
-    backdrop-filter: blur(10px);
+    pointer-events: auto;
+    gap: 8px;
+    padding: 7px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(236, 248, 243, 0.24)),
+      rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: 999px;
+    box-shadow: var(--glass-shadow-soft), var(--glass-highlight);
+    backdrop-filter: blur(22px) saturate(1.35);
+    -webkit-backdrop-filter: blur(22px) saturate(1.35);
   }
 
   .dock-trigger {
-    width: 42px;
-    height: 42px;
-    border-radius: 13px;
+    width: 46px;
+    height: 46px;
+    color: #fffdf2;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.48), transparent 34%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(18, 40, 35, 0.12)),
+      rgba(41, 69, 60, 0.58);
+    border-color: rgba(255, 255, 255, 0.38);
+    border-radius: 50%;
+    box-shadow:
+      0 8px 18px rgba(20, 31, 28, 0.16),
+      var(--glass-highlight);
+
+    &:hover {
+      transform: none;
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+
+    .status-light {
+      right: 7px;
+      bottom: 7px;
+      width: 8px;
+      height: 8px;
+      border: 1px solid rgba(255, 253, 248, 0.8);
+    }
+  }
+
+  .server-icon,
+  .network-icon,
+  .settings-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .server-icon {
+    align-content: center;
+    gap: 4px;
+
+    span {
+      height: 5px;
+      border-radius: 999px;
+      box-shadow: inset -6px 0 0 rgba(255, 253, 248, 0.34);
+    }
+  }
+
+  .network-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .settings-icon {
+    align-content: center;
+    gap: 6px;
+
+    span {
+      height: 3px;
+      border-radius: 999px;
+    }
   }
 
   .server-panel {
     left: 50%;
     bottom: 62px;
+    z-index: 3;
     width: min(320px, calc(100vw - 24px));
+    pointer-events: auto;
     transform: translateX(-50%);
   }
 }

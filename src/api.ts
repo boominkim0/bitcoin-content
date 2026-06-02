@@ -50,6 +50,16 @@ export interface BlocksResponse {
   blocks: BlockData[]
 }
 
+export interface BlockTransactionsResponse {
+  height: number
+  total?: number
+  offset: number
+  limit: number
+  next_offset?: number | null
+  has_more?: boolean
+  transactions: TransactionSummaryData[]
+}
+
 export interface MempoolData {
   loaded: boolean
   size: number
@@ -124,6 +134,16 @@ export async function fetchStatus(): Promise<StatusData> {
 
 export async function fetchBlock(height: number): Promise<BlockData> {
   return request<BlockData>(`/api/v1/block/${height}`)
+}
+
+export async function fetchBlockTransactions(
+  height: number,
+  offset: number,
+  limit: number
+): Promise<BlockTransactionsResponse> {
+  return request<BlockTransactionsResponse>(
+    `/api/v1/block/${height}/transactions?offset=${offset}&limit=${limit}`
+  )
 }
 
 export async function fetchBlocks(from: number, to: number): Promise<BlockData[]> {

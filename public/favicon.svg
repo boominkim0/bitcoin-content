@@ -1,5 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#174c37"/>
-  <circle cx="32" cy="32" r="20" fill="#f2a824"/>
-  <path fill="#174c37" d="M27 17h6v5h3c5 0 8 3 8 7 0 3-2 5-4 6 3 1 5 3 5 7 0 5-4 8-10 8h-2v5h-6v-5h-5v-5h3V27h-3v-5h5v-5Zm4 10v6h5c2 0 3-1 3-3s-1-3-4-3h-4Zm0 11v7h5c3 0 4-1 4-3s-1-4-4-4h-5Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bitcoin stone pagoda app icon">
+  <defs>
+    <linearGradient id="bg" x1="12" y1="4" x2="54" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eefbfc"/>
+      <stop offset="0.58" stop-color="#8eb9b1"/>
+      <stop offset="1" stop-color="#315d50"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="22" y1="11" x2="43" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f6efd7"/>
+      <stop offset="1" stop-color="#9d9278"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="13" y1="34" x2="42" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eafffb" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#2f8a82" stop-opacity="0.78"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <circle cx="45" cy="18" r="18" fill="#fff6d7" opacity="0.42"/>
+  <path fill="#6f6858" opacity="0.22" d="M18 54h32v4H18z"/>
+  <path fill="url(#stone)" d="M30 8h4l2 5h-8l2-5Zm-8 10h20l3 5H19l3-5Zm3 7h14v7H25v-7Zm-8 10h30l3 5H14l3-5Zm8 7h14v10H25V42Z"/>
+  <path fill="#5f584a" opacity="0.32" d="M23 20h18l1 2H22l1-2Zm-6 17h30l1 2H16l1-2Z"/>
+  <g stroke="#fafff9" stroke-opacity="0.72" stroke-width="1.4">
+    <rect x="12" y="39" width="13" height="13" rx="3" fill="url(#glass)"/>
+    <rect x="26" y="39" width="13" height="13" rx="3" fill="url(#glass)"/>
+    <rect x="19" y="25" width="13" height="13" rx="3" fill="url(#glass)"/>
+  </g>
+  <circle cx="45" cy="45" r="10" fill="#d5ab55" stroke="#fff3bf" stroke-width="2"/>
+  <path fill="#315d50" d="M42 36h4v3h1c3 0 5 2 5 4 0 1.6-.8 2.8-2.1 3.4 1.4.6 2.3 1.8 2.3 3.6 0 2.9-2.4 4.6-5.9 4.6H46V58h-4v-3.4h-3v-3h2V42h-2v-3h3v-3Zm4 6v3h1c1.1 0 1.8-.5 1.8-1.5S48.1 42 47 42h-1Zm0 6v3.4h1.2c1.2 0 1.9-.6 1.9-1.7 0-1-.7-1.7-2-1.7H46Z"/>
 </svg>

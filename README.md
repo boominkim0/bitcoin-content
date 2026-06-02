@@ -48,6 +48,7 @@ VITE_BTC_API_KEY=replace-with-local-secret
 - `GET /api/v1/status`: 현재 체인 높이를 가져옵니다.
 - `GET /api/v1/blocks?from={height}&to={height}`: 화면에 필요한 블록 상세를 범위로 가져옵니다.
 - `GET /api/v1/block/{height}`: 블록 클릭 시 보상, 수수료, 거래 요약, Coinbase 메시지가 포함된 상세를 가져옵니다.
+- `GET /api/v1/block/{height}/transactions?offset={offset}&limit={limit}`: 전체화면 거래내역 모달에서 블록 거래 요약을 페이지 단위로 가져옵니다. 응답은 `{ height, total, offset, limit, next_offset, has_more, transactions }` 형태이며, `transactions` 항목은 `txid`, `hash`, `is_coinbase`, `output_satoshi`, `fee_satoshi`, `vsize`, `size`, `weight`, `vin_count`, `vout_count`를 포함합니다.
 - `GET /api/v1/mempool`: `ING` 블록 클릭 시 Bitcoin Core `getmempoolinfo` 기반 mempool 현황을 가져옵니다.
 - `GET /api/v1/server-status`: 왼쪽 하단 서버 상태 패널에 필요한 시스템/Bitcoin 상태를 가져옵니다.
 
@@ -79,7 +80,8 @@ VITE_BTC_API_KEY=replace-with-local-secret
 - 채굴 보조금, 총 수수료, 총 보상, 평균 수수료, 거래 요약, 채굴자 Coinbase 메시지를 표시합니다.
 - 각 주요 항목 옆의 `?` 아이콘은 해당 값의 의미를 설명하는 툴팁입니다.
 - 툴팁은 모달 스크롤 영역 밖으로 잘리지 않도록 화면 기준으로 표시됩니다.
-- 거래 요약 목록은 블록 모달 내부에서 별도 스크롤됩니다.
+- 거래 요약 목록은 상세 모달에서 처음 5개만 표시합니다.
+- `거래내역 더보기`를 누르면 전체화면 거래내역 모달이 열리고, 아래로 스크롤할 때 `/api/v1/block/{height}/transactions`를 `offset`/`limit` 기반으로 계속 호출합니다.
 
 ## 서버 상태 패널
 
