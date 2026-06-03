@@ -1,7 +1,25 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Ref } from 'vue'
-import { fetchBlock, fetchBlockTransactions, fetchBlocks, fetchMempool, fetchStatus } from '@/api'
-import type { BlockData, MempoolData, TransactionSummaryData } from '@/api'
+import {
+  fetchAddressHistory,
+  fetchAddressUtxos,
+  fetchBlock,
+  fetchBlockTransactions,
+  fetchBlocks,
+  fetchMempool,
+  fetchStatus,
+  fetchTransaction,
+  searchBitcoin
+} from '@/api'
+import type {
+  AddressHistoryData,
+  AddressUtxoData,
+  AddressUtxosResponse,
+  BlockData,
+  MempoolData,
+  TransactionDetailData,
+  TransactionSummaryData
+} from '@/api'
 import type { DeviceKind } from '@/composables/useDeviceKind'
 import {
   DIFFICULTY_INTERVAL,
@@ -36,9 +54,19 @@ const SCROLL_THROTTLE = 300
 const NEW_BLOCK_ANIMATION_MS = 1200
 const NEW_BLOCK_STAGGER_MS = 160
 const NEW_BLOCK_SOUND_MIN_INTERVAL_MS = 1400
+const FOREGROUND_SYNC_DELAY_MS = 160
+const TIP_DETAIL_RETRY_DELAY_MS = 1800
+const TIP_STICKY_THRESHOLD = 2
 const DISPLAY_UNIT_STORAGE_KEY = 'bitcoin-content-display-unit'
 const TIME_DISPLAY_MODE_STORAGE_KEY = 'bitcoin-content-time-display-mode'
-const TRANSACTION_HISTORY_PAGE_SIZE = 25
+const TRANSACTION_HISTORY_PAGE_SIZE = 5
+const ADDRESS_PAGE_SIZE = 5
+
+type LatestStatusSyncOptions = {
+  animateNewBlocks?: boolean
+  playSound?: boolean
+  silent?: boolean
+}
 
 type WebkitAudioWindow = Window & {
   webkitAudioContext?: typeof AudioContext
@@ -66,6 +94,25 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   const transactionHistoryTotal = ref<number | null>(null)
   const transactionHistoryNextOffset = ref(0)
   const transactionHistoryBlockHeight = ref<number | null>(null)
+  const searchQuery = ref('')
+  const searchLoading = ref(false)
+  const searchError = ref('')
+  const selectedTransaction = ref<TransactionDetailData | null>(null)
+  const transactionDetailLoading = ref(false)
+  const transactionDetailError = ref('')
+  const selectedAddress = ref('')
+  const addressUtxos = ref<AddressUtxoData[]>([])
+  const addressUtxosLoading = ref(false)
+  const addressUtxosLoadingMore = ref(false)
+  const addressUtxosError = ref('')
+  const addressUtxosHasMore = ref(false)
+  const addressUtxosTotal = ref<number | null>(null)
+  const addressUtxosTotalValue = ref<number | null>(null)
+  const addressUtxosNextOffset = ref(0)
+  const addressHistory = ref<AddressHistoryData[]>([])
+  const addressHistoryLoading = ref(false)
+  const addressHistoryError = ref('')
+  const addressHistoryTotal = ref<number | null>(null)
   const networkModalVisible = ref(false)
   const mempoolModalVisible = ref(false)
   const settingsModalVisible = ref(false)
@@ -94,7 +141,14 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   let lastVisibleHalvingEpoch: number | null = null
   let selectedBlockRequestId = 0
   let transactionHistoryRequestId = 0
+  let searchRequestId = 0
+  let transactionDetailRequestId = 0
+  let addressRequestId = 0
   let pollTimer: ReturnType<typeof setInterval> | null = null
+  let foregroundSyncTimer: ReturnType<typeof setTimeout> | null = null
+  let tipDetailRetryTimer: ReturnType<typeof setTimeout> | null = null
+  let tipDetailRetryCount = 0
+  let latestStatusSyncing = false
   let audioContext: AudioContext | null = null
   let blockSoundElement: HTMLAudioElement | null = null
   let audioUnlocked = false
@@ -156,6 +210,11 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
       result.push(existing || { height, hash: null, time: null })
     }
     return result
+  })
+
+  const isTipBlockReady = computed(() => {
+    const tipBlock = blocks.value.get(tipHeight.value)
+    return Boolean(tipBlock?.hash && typeof tipBlock.time === 'number')
   })
 
   const trackHeight = computed(() => {
@@ -352,6 +411,229 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     transactionHistoryBlockHeight.value = null
   }
 
+  async function submitSearch() {
+    const query = searchQuery.value.trim()
+    if (!query || searchLoading.value) return
+
+    const requestId = ++searchRequestId
+    searchLoading.value = true
+    searchError.value = ''
+
+    try {
+      const result = await searchBitcoin(query)
+      if (requestId !== searchRequestId) return
+
+      if (result.type === 'block') {
+        closeTransactionDetail()
+        closeAddressDetail()
+        openModal(result.block)
+        return
+      }
+
+      if (result.type === 'transaction') {
+        closeModal()
+        closeAddressDetail()
+        selectedTransaction.value = result.transaction
+        transactionDetailError.value = ''
+        return
+      }
+
+      if (result.type === 'address') {
+        closeModal()
+        closeTransactionDetail()
+        openAddressDetail(result.address, result.utxos, result.history?.transactions)
+      }
+    } catch {
+      if (requestId === searchRequestId) {
+        searchError.value = 'height, 트랜잭션 ID, 지갑주소를 찾지 못했습니다.'
+      }
+    } finally {
+      if (requestId === searchRequestId) {
+        searchLoading.value = false
+      }
+    }
+  }
+
+  async function openTransactionDetail(txid?: string) {
+    const normalizedTxid = txid?.trim()
+    if (!normalizedTxid) return
+
+    const requestId = ++transactionDetailRequestId
+    closeModal()
+    closeAddressDetail()
+    selectedTransaction.value = null
+    transactionDetailLoading.value = true
+    transactionDetailError.value = ''
+
+    try {
+      const detail = await fetchTransaction(normalizedTxid)
+      if (requestId === transactionDetailRequestId) {
+        selectedTransaction.value = detail
+      }
+    } catch {
+      if (requestId === transactionDetailRequestId) {
+        transactionDetailError.value = '거래 상세내역을 불러오지 못했습니다.'
+      }
+    } finally {
+      if (requestId === transactionDetailRequestId) {
+        transactionDetailLoading.value = false
+      }
+    }
+  }
+
+  function closeTransactionDetail() {
+    transactionDetailRequestId++
+    selectedTransaction.value = null
+    transactionDetailLoading.value = false
+    transactionDetailError.value = ''
+  }
+
+  function openAddressDetail(
+    address: string,
+    initialUtxos?: AddressUtxosResponse,
+    initialHistory?: AddressHistoryData[]
+  ) {
+    if (!address) return
+
+    const requestId = ++addressRequestId
+    selectedAddress.value = address
+    addressUtxosError.value = ''
+    addressHistoryError.value = ''
+    addressUtxos.value = []
+    addressHistory.value = []
+
+    if (initialUtxos) {
+      applyAddressUtxosPage(initialUtxos, true)
+    }
+    if (initialHistory) {
+      addressHistory.value = initialHistory
+    }
+
+    if (!initialUtxos) {
+      loadAddressUtxos(true, requestId)
+    }
+  }
+
+  function closeAddressDetail() {
+    addressRequestId++
+    selectedAddress.value = ''
+    addressUtxos.value = []
+    addressUtxosLoading.value = false
+    addressUtxosLoadingMore.value = false
+    addressUtxosError.value = ''
+    addressUtxosHasMore.value = false
+    addressUtxosTotal.value = null
+    addressUtxosTotalValue.value = null
+    addressUtxosNextOffset.value = 0
+    addressHistory.value = []
+    addressHistoryLoading.value = false
+    addressHistoryError.value = ''
+    addressHistoryTotal.value = null
+  }
+
+  function loadMoreAddressUtxos() {
+    if (!selectedAddress.value) return
+    if (!addressUtxosHasMore.value) return
+    if (addressUtxosLoading.value || addressUtxosLoadingMore.value) return
+
+    loadAddressUtxos(false, addressRequestId)
+  }
+
+  async function loadAddressUtxos(reset: boolean, requestId = addressRequestId) {
+    const address = selectedAddress.value
+    if (!address) return
+
+    const offset = reset ? 0 : addressUtxosNextOffset.value
+    const loadingRef = reset ? addressUtxosLoading : addressUtxosLoadingMore
+    loadingRef.value = true
+    addressUtxosError.value = ''
+
+    try {
+      const page = await fetchAddressUtxos(address, offset, ADDRESS_PAGE_SIZE)
+      if (requestId !== addressRequestId || selectedAddress.value !== address) return
+      applyAddressUtxosPage(page, reset)
+    } catch (error: unknown) {
+      if (requestId === addressRequestId && selectedAddress.value === address) {
+        addressUtxosError.value = addressLoadErrorMessage(error, 'UTXO')
+      }
+    } finally {
+      if (requestId === addressRequestId && selectedAddress.value === address) {
+        loadingRef.value = false
+      }
+    }
+  }
+
+  function loadSelectedAddressHistory() {
+    if (!selectedAddress.value) return
+    if (addressHistoryLoading.value) return
+    if (addressHistory.value.length > 0 || addressHistoryError.value) return
+
+    loadAddressHistory(addressRequestId)
+  }
+
+  async function loadAddressHistory(requestId = addressRequestId) {
+    const address = selectedAddress.value
+    if (!address) return
+
+    addressHistoryLoading.value = true
+    addressHistoryError.value = ''
+
+    try {
+      const page = await fetchAddressHistory(address, 0, ADDRESS_PAGE_SIZE)
+      if (requestId !== addressRequestId || selectedAddress.value !== address) return
+      addressHistory.value = Array.isArray(page.transactions) ? page.transactions : []
+      addressHistoryTotal.value = typeof page.total === 'number' ? page.total : null
+    } catch (error: unknown) {
+      if (requestId === addressRequestId && selectedAddress.value === address) {
+        addressHistoryError.value = addressLoadErrorMessage(error, '거래내역')
+      }
+    } finally {
+      if (requestId === addressRequestId && selectedAddress.value === address) {
+        addressHistoryLoading.value = false
+      }
+    }
+  }
+
+  function applyAddressUtxosPage(page: AddressUtxosResponse, reset: boolean) {
+    const nextUtxos = Array.isArray(page.utxos) ? page.utxos : []
+    addressUtxos.value = reset
+      ? nextUtxos
+      : appendUniqueUtxos(addressUtxos.value, nextUtxos)
+    addressUtxosTotal.value = typeof page.total === 'number' ? page.total : null
+    addressUtxosTotalValue.value = typeof page.total_value_satoshi === 'number'
+      ? page.total_value_satoshi
+      : null
+    const nextOffset = typeof page.next_offset === 'number'
+      ? page.next_offset
+      : page.offset + nextUtxos.length
+    addressUtxosNextOffset.value = nextOffset
+    addressUtxosHasMore.value = page.has_more ?? (
+      nextUtxos.length >= ADDRESS_PAGE_SIZE &&
+      (addressUtxosTotal.value === null || nextOffset < addressUtxosTotal.value)
+    )
+  }
+
+  function appendUniqueUtxos(existing: AddressUtxoData[], incoming: AddressUtxoData[]) {
+    const seen = new Set(existing.map(utxo => `${utxo.tx_hash}:${utxo.tx_pos}`))
+    const next = [...existing]
+
+    incoming.forEach(utxo => {
+      const key = `${utxo.tx_hash}:${utxo.tx_pos}`
+      if (seen.has(key)) return
+      seen.add(key)
+      next.push(utxo)
+    })
+
+    return next
+  }
+
+  function addressLoadErrorMessage(error: unknown, label: string) {
+    if (error instanceof Error && error.message.includes('electrum')) {
+      return `거래가 많은 주소라 ${label} 조회가 오래 걸려 실패했습니다. 잠시 후 다시 시도해 주세요.`
+    }
+    return `주소 ${label}를 불러오지 못했습니다.`
+  }
+
   function appendUniqueTransactions(
     existing: TransactionSummaryData[],
     incoming: TransactionSummaryData[]
@@ -371,8 +653,11 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
 
   function openNetworkModal() {
     closeModal()
+    closeTransactionDetail()
+    closeAddressDetail()
     closeDockModals()
     networkModalVisible.value = true
+    syncLatestStatus({ silent: true })
     loadMempoolData()
   }
 
@@ -400,6 +685,8 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
 
   function openSettingsModal() {
     closeModal()
+    closeTransactionDetail()
+    closeAddressDetail()
     closeDockModals()
     settingsModalVisible.value = true
   }
@@ -540,7 +827,11 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   async function fetchVisibleBlocks() {
     if (tipHeight.value === 0) return
 
-    const start = visibleStartHeight.value
+    const start = Math.max(0, Math.min(visibleStartHeight.value, maxStartHeight.value))
+    if (start !== visibleStartHeight.value) {
+      visibleStartHeight.value = start
+    }
+
     const end = Math.min(tipHeight.value, start + visibleCount.value - 1)
 
     const neededHeights: number[] = []
@@ -561,6 +852,7 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
       fetched.forEach(block => {
         blocks.value.set(block.height, block)
       })
+      scheduleTipDetailRetry()
     } catch (error: unknown) {
       if (error instanceof Error) {
         errorMessage.value = error.message
@@ -579,6 +871,7 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
       visibleStartHeight.value = maxStartHeight.value
 
       await fetchVisibleBlocks()
+      scheduleTipDetailRetry()
     } catch (error: unknown) {
       if (error instanceof Error) {
         errorMessage.value = error.message
@@ -657,32 +950,105 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   }
 
   async function pollStatus() {
+    await syncLatestStatus({
+      animateNewBlocks: true,
+      playSound: isDocumentVisible(),
+      silent: true
+    })
+  }
+
+  async function syncLatestStatus(options: LatestStatusSyncOptions = {}) {
+    if (latestStatusSyncing) return
+
+    latestStatusSyncing = true
+
     try {
       const status = await fetchStatus()
       const newTip = status.blockchain.blocks
       const oldTip = tipHeight.value
+      const oldMaxStartHeight = maxStartHeight.value
+      const shouldStickToTip = isViewingTipWindow(oldMaxStartHeight)
 
-      if (newTip > oldTip) {
-        const addedBlockCount = newTip - oldTip
-        markNewlyMinedBlocks(oldTip + 1, newTip)
-        playNewBlockSound(addedBlockCount)
-        tipHeight.value = newTip
-
-        for (let h = oldTip + 1; h <= newTip; h++) {
-          if (!blocks.value.has(h)) {
-            blocks.value.set(h, { height: h, hash: null, time: null })
+      if (newTip !== oldTip) {
+        if (newTip > oldTip && options.animateNewBlocks) {
+          const addedBlockCount = newTip - oldTip
+          markNewlyMinedBlocks(oldTip + 1, newTip)
+          if (options.playSound) {
+            playNewBlockSound(addedBlockCount)
           }
         }
 
-        const max = maxStartHeight.value
-        if (visibleStartHeight.value >= max - (newTip - oldTip)) {
-          visibleStartHeight.value = max
-        }
+        tipHeight.value = newTip
+        tipDetailRetryCount = 0
 
-        await fetchVisibleBlocks()
+        if (newTip < oldTip) {
+          for (const height of blocks.value.keys()) {
+            if (height > newTip) {
+              blocks.value.delete(height)
+            }
+          }
+        }
       }
-    } catch {
-      // silently fail on polling errors
+
+      if (shouldStickToTip || visibleStartHeight.value > maxStartHeight.value) {
+        visibleStartHeight.value = maxStartHeight.value
+      }
+
+      await fetchVisibleBlocks()
+      scheduleTipDetailRetry()
+    } catch (error: unknown) {
+      if (!options.silent && error instanceof Error) {
+        errorMessage.value = error.message
+      }
+    } finally {
+      latestStatusSyncing = false
+    }
+  }
+
+  function scheduleForegroundSync() {
+    if (foregroundSyncTimer) clearTimeout(foregroundSyncTimer)
+    foregroundSyncTimer = setTimeout(() => {
+      foregroundSyncTimer = null
+      syncLatestStatus({
+        animateNewBlocks: false,
+        playSound: false,
+        silent: true
+      })
+    }, FOREGROUND_SYNC_DELAY_MS)
+  }
+
+  function scheduleTipDetailRetry() {
+    if (initialLoading.value) return
+    if (isTipBlockReady.value) {
+      tipDetailRetryCount = 0
+      if (tipDetailRetryTimer) {
+        clearTimeout(tipDetailRetryTimer)
+        tipDetailRetryTimer = null
+      }
+      return
+    }
+    if (!isViewingTipWindow() || !isDocumentVisible()) return
+    if (tipDetailRetryTimer || tipDetailRetryCount >= 4) return
+
+    tipDetailRetryCount += 1
+    tipDetailRetryTimer = setTimeout(() => {
+      tipDetailRetryTimer = null
+      fetchVisibleBlocks()
+    }, TIP_DETAIL_RETRY_DELAY_MS)
+  }
+
+  function isViewingTipWindow(maxHeight = maxStartHeight.value) {
+    if (initialLoading.value) return true
+    return visibleStartHeight.value >= Math.max(0, maxHeight - TIP_STICKY_THRESHOLD)
+  }
+
+  function isDocumentVisible() {
+    return typeof document === 'undefined' || document.visibilityState === 'visible'
+  }
+
+  function handleVisibilityChange() {
+    if (isDocumentVisible()) {
+      scheduleForegroundSync()
     }
   }
 
@@ -942,6 +1308,10 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     window.addEventListener('keydown', unlockBlockSound, { once: true })
     window.addEventListener('touchstart', unlockBlockSound, { once: true, passive: true })
     window.addEventListener('resize', handleResize)
+    window.addEventListener('focus', scheduleForegroundSync)
+    window.addEventListener('online', scheduleForegroundSync)
+    window.addEventListener('pageshow', scheduleForegroundSync)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
   })
 
   watch(deviceKind, () => {
@@ -970,8 +1340,14 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     window.removeEventListener('pointerdown', unlockBlockSound)
     window.removeEventListener('keydown', unlockBlockSound)
     window.removeEventListener('touchstart', unlockBlockSound)
+    window.removeEventListener('focus', scheduleForegroundSync)
+    window.removeEventListener('online', scheduleForegroundSync)
+    window.removeEventListener('pageshow', scheduleForegroundSync)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
     if (throttleTimer) clearTimeout(throttleTimer)
     if (pollTimer) clearInterval(pollTimer)
+    if (foregroundSyncTimer) clearTimeout(foregroundSyncTimer)
+    if (tipDetailRetryTimer) clearTimeout(tipDetailRetryTimer)
     if (newBlockAnimationTimer) clearTimeout(newBlockAnimationTimer)
     if (halvingEraToastTimer) clearTimeout(halvingEraToastTimer)
     if (dragFrame !== null) window.cancelAnimationFrame(dragFrame)
@@ -1005,6 +1381,24 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     transactionHistoryHasMore,
     transactionHistoryTotal,
     transactionHistoryDisplayTotal,
+    searchQuery,
+    searchLoading,
+    searchError,
+    selectedTransaction,
+    transactionDetailLoading,
+    transactionDetailError,
+    selectedAddress,
+    addressUtxos,
+    addressUtxosLoading,
+    addressUtxosLoadingMore,
+    addressUtxosError,
+    addressUtxosHasMore,
+    addressUtxosTotal,
+    addressUtxosTotalValue,
+    addressHistory,
+    addressHistoryLoading,
+    addressHistoryError,
+    addressHistoryTotal,
     networkModalVisible,
     mempoolModalVisible,
     settingsModalVisible,
@@ -1022,6 +1416,7 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     selectedTransactions,
     maxStartHeight,
     visibleBlocks,
+    isTipBlockReady,
     thumbStyle,
     scaleMarks,
     stackClass,
@@ -1030,6 +1425,13 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     openTransactionHistory,
     closeTransactionHistory,
     loadMoreBlockTransactions,
+    submitSearch,
+    openTransactionDetail,
+    closeTransactionDetail,
+    openAddressDetail,
+    closeAddressDetail,
+    loadMoreAddressUtxos,
+    loadSelectedAddressHistory,
     openNetworkModal,
     closeNetworkModal,
     closeMempoolModal,

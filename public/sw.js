@@ -1,4 +1,4 @@
-const CACHE_NAME = "bitcoin-content-pwa-v1"
+const CACHE_NAME = "bitcoin-content-pwa-v2"
 
 function scopePath(path = "") {
   const scope = new URL(self.registration.scope).pathname
@@ -27,6 +27,12 @@ self.addEventListener("install", (event) => {
       .then((cache) => cache.addAll(PRECACHE_URLS))
       .then(() => self.skipWaiting())
   )
+})
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting()
+  }
 })
 
 self.addEventListener("activate", (event) => {

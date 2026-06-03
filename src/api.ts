@@ -40,6 +40,23 @@ export interface TransactionSummaryData {
   vout_count?: number
 }
 
+export interface TransactionAddressData {
+  address: string
+  value_satoshi?: number
+  vout?: number
+}
+
+export interface TransactionDetailData extends TransactionSummaryData {
+  txid: string
+  version?: number
+  locktime?: number
+  fee?: number
+  vin?: unknown[]
+  vout?: unknown[]
+  addresses?: TransactionAddressData[]
+  summary?: TransactionSummaryData
+}
+
 export interface StatusData {
   blockchain: {
     blocks: number
@@ -59,6 +76,63 @@ export interface BlockTransactionsResponse {
   has_more?: boolean
   transactions: TransactionSummaryData[]
 }
+
+export interface AddressUtxoData {
+  tx_hash: string
+  tx_pos: number
+  height: number
+  value: number
+}
+
+export interface AddressHistoryData {
+  tx_hash: string
+  height: number
+  fee?: number
+}
+
+export interface AddressUtxosResponse {
+  address: string
+  scripthash?: string
+  total: number
+  total_value_satoshi?: number
+  offset: number
+  limit: number
+  next_offset?: number | null
+  has_more?: boolean
+  utxos: AddressUtxoData[]
+}
+
+export interface AddressHistoryResponse {
+  address: string
+  scripthash?: string
+  total: number
+  offset: number
+  limit: number
+  next_offset?: number | null
+  has_more?: boolean
+  transactions: AddressHistoryData[]
+}
+
+export type SearchResponse =
+  | {
+      query: string
+      type: 'block'
+      height: number
+      block: BlockData
+    }
+  | {
+      query: string
+      type: 'transaction'
+      txid: string
+      transaction: TransactionDetailData
+    }
+  | {
+      query: string
+      type: 'address'
+      address: string
+      utxos?: AddressUtxosResponse
+      history?: AddressHistoryResponse
+    }
 
 export interface MempoolData {
   loaded: boolean
@@ -144,6 +218,34 @@ export async function fetchBlockTransactions(
   return request<BlockTransactionsResponse>(
     `/api/v1/block/${height}/transactions?offset=${offset}&limit=${limit}`
   )
+}
+
+export async function fetchTransaction(txid: string): Promise<TransactionDetailData> {
+  return request<TransactionDetailData>(`/api/v1/tx/${encodeURIComponent(txid)}`)
+}
+
+export async function fetchAddressUtxos(
+  address: string,
+  offset: number,
+  limit: number
+): Promise<AddressUtxosResponse> {
+  return request<AddressUtxosResponse>(
+    `/api/v1/address/${encodeURIComponent(address)}/utxos?offset=${offset}&limit=${limit}`
+  )
+}
+
+export async function fetchAddressHistory(
+  address: string,
+  offset: number,
+  limit: number
+): Promise<AddressHistoryResponse> {
+  return request<AddressHistoryResponse>(
+    `/api/v1/address/${encodeURIComponent(address)}/history?offset=${offset}&limit=${limit}`
+  )
+}
+
+export async function searchBitcoin(query: string): Promise<SearchResponse> {
+  return request<SearchResponse>(`/api/v1/search?q=${encodeURIComponent(query)}`)
 }
 
 export async function fetchBlocks(from: number, to: number): Promise<BlockData[]> {

@@ -22,7 +22,7 @@
         @select="openModal"
       />
     </li>
-    <li v-if="!initialLoading" :key="tipHeight + 1" class="stack-row ing-block">
+    <li v-if="!initialLoading && isTipBlockReady" :key="tipHeight + 1" class="stack-row ing-block">
       <Block
         :block="{ height: tipHeight + 1, hash: null, time: null }"
         :time-display-mode="timeDisplayMode"
@@ -46,6 +46,7 @@ const props = defineProps<{
 const {
   tipHeight,
   visibleBlocks,
+  isTipBlockReady,
   initialLoading,
   timeDisplayMode,
   stackClass,

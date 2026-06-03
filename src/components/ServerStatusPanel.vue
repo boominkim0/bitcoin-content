@@ -705,11 +705,11 @@ onBeforeUnmount(() => {
 }
 
 .server-widget-mobile {
-  left: 0;
-  right: 0;
+  left: 12px;
+  right: auto;
   bottom: max(12px, env(safe-area-inset-bottom));
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   pointer-events: none;
 
   .widget-shield {
@@ -796,12 +796,12 @@ onBeforeUnmount(() => {
   }
 
   .server-panel {
-    left: 50%;
+    left: 0;
     bottom: 62px;
     z-index: 3;
     width: min(320px, calc(100vw - 24px));
     pointer-events: auto;
-    transform: translateX(-50%);
+    transform: none;
   }
 }
 </style>

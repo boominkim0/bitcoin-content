@@ -369,7 +369,9 @@
                 </div>
                 <div class="txid-card">
                   <span class="modal-label">트랜잭션 ID</span>
-                  <code>{{ tx.txid || tx.hash || '---' }}</code>
+                  <button class="txid-button" type="button" @click="openTransactionDetail(tx.txid || tx.hash)">
+                    {{ tx.txid || tx.hash || '---' }}
+                  </button>
                 </div>
                 <div class="tx-meta">
                   <span>출력 {{ formatSatoshiAmount(tx.output_satoshi) }}</span>
@@ -518,7 +520,9 @@
             </div>
             <div class="txid-card">
               <span class="modal-label">트랜잭션 ID</span>
-              <code>{{ tx.txid || tx.hash || '---' }}</code>
+              <button class="txid-button" type="button" @click="openTransactionDetail(tx.txid || tx.hash)">
+                {{ tx.txid || tx.hash || '---' }}
+              </button>
             </div>
             <div class="tx-meta">
               <span>출력 {{ formatSatoshiAmount(tx.output_satoshi) }}</span>
@@ -546,6 +550,222 @@
       </div>
     </div>
   </div>
+
+  <div
+    v-if="selectedTransaction || transactionDetailLoading || transactionDetailError"
+    class="block-modal tx-detail-modal"
+    :class="`block-modal-${variant}`"
+    @click.self="closeTransactionDetail"
+    @wheel.stop
+  >
+    <div class="modal-card tx-detail-card" @click.stop>
+      <button class="modal-close" type="button" @click="closeTransactionDetail">&times;</button>
+      <div class="modal-header detail-header">
+        <span>트랜잭션 상세</span>
+        {{ transactionDetailTitle }}
+      </div>
+      <div class="modal-body detail-body">
+        <div v-if="transactionDetailLoading" class="detail-skeleton-panel">
+          <div class="skeleton-line wide"></div>
+          <div class="skeleton-grid">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+        <div v-else-if="transactionDetailError" class="modal-state error">{{ transactionDetailError }}</div>
+        <template v-else-if="selectedTransaction">
+          <section class="detail-hero-card">
+            <span class="modal-label">트랜잭션 ID</span>
+            <code class="hash-line">{{ selectedTransaction.txid }}</code>
+          </section>
+
+          <div class="detail-summary-grid">
+            <div class="metric-tile">
+              <span class="modal-label">입력</span>
+              <strong>{{ transactionInputCount(selectedTransaction).toLocaleString('ko-KR') }} in</strong>
+              <small>이전 출력에서 가져온 금액</small>
+            </div>
+            <div class="metric-tile">
+              <span class="modal-label">출력</span>
+              <strong>{{ transactionOutputCount(selectedTransaction).toLocaleString('ko-KR') }} out</strong>
+              <small>새로 만들어진 수신처</small>
+            </div>
+            <div class="metric-tile">
+              <span class="modal-label">수수료</span>
+              <strong>{{ formatSatoshiAmount(transactionFeeSatoshi(selectedTransaction)) }}</strong>
+              <small>채굴자에게 지급된 비용</small>
+            </div>
+            <div class="metric-tile">
+              <span class="modal-label">크기</span>
+              <strong>{{ selectedTransaction.vsize ?? selectedTransaction.size ?? '---' }} vB</strong>
+              <small>수수료율 계산 기준</small>
+            </div>
+          </div>
+
+          <section class="detail-section-card">
+            <div class="detail-section-heading">
+              <div class="modal-section-title">출력 주소</div>
+              <p>주소를 누르면 해당 주소의 UTXO와 최근 거래내역을 볼 수 있습니다.</p>
+            </div>
+            <div v-if="selectedTransaction.addresses?.length" class="address-list">
+              <button
+                v-for="address in selectedTransaction.addresses"
+                :key="`${address.address}-${address.vout ?? 'x'}`"
+                class="address-chip"
+                type="button"
+                @click="openAddressDetail(address.address)"
+              >
+                <code>{{ address.address }}</code>
+                <span>{{ formatSatoshiAmount(address.value_satoshi) }}</span>
+              </button>
+            </div>
+            <div v-else class="modal-state">주소로 표현되는 출력이 없습니다.</div>
+          </section>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <div
+    v-if="selectedAddress"
+    class="block-modal address-modal"
+    :class="`block-modal-${variant}`"
+    @click.self="closeAddressDetail"
+    @wheel.stop
+  >
+    <div class="modal-card address-card" @click.stop>
+      <button class="modal-close" type="button" @click="closeAddressDetail">&times;</button>
+      <div class="modal-header detail-header">
+        <span>주소 상세</span>
+        UTXO
+      </div>
+      <div ref="addressBodyRef" class="modal-body detail-body address-body">
+        <section class="detail-hero-card">
+          <span class="modal-label">지갑주소</span>
+          <code class="hash-line">{{ selectedAddress }}</code>
+        </section>
+
+        <section class="address-summary-grid">
+          <div class="metric-tile address-balance-tile">
+            <span class="modal-label">총 보유액</span>
+            <strong>{{ addressBalanceLabel }}</strong>
+            <small>{{ addressBalanceCaption }}</small>
+          </div>
+          <div class="metric-tile">
+            <span class="modal-label">사용 가능한 UTXO</span>
+            <strong>{{ addressUtxosDisplayTotal.toLocaleString('ko-KR') }}개</strong>
+            <small>{{ addressUtxos.length.toLocaleString('ko-KR') }}개 불러옴</small>
+          </div>
+          <div class="metric-tile">
+            <span class="modal-label">최근 거래내역</span>
+            <strong>{{ addressHistoryDisplayTotal.toLocaleString('ko-KR') }}개</strong>
+            <small>최근 순서로 확인</small>
+          </div>
+        </section>
+
+        <div class="address-tabs" role="tablist" aria-label="주소 상세 보기">
+          <button
+            type="button"
+            :class="{ active: addressActiveTab === 'utxos' }"
+            role="tab"
+            :aria-selected="addressActiveTab === 'utxos'"
+            @click="addressActiveTab = 'utxos'"
+          >
+            UTXO
+          </button>
+          <button
+            type="button"
+            :class="{ active: addressActiveTab === 'history' }"
+            role="tab"
+            :aria-selected="addressActiveTab === 'history'"
+            @click="addressActiveTab = 'history'"
+          >
+            거래내역
+          </button>
+        </div>
+
+        <section class="detail-section-card address-tab-card">
+          <div v-if="addressActiveTab === 'utxos'" class="address-tab-content">
+            <div class="detail-section-heading">
+              <div class="modal-section-title">사용 가능한 UTXO</div>
+              <p>
+                {{ addressUtxos.length.toLocaleString('ko-KR') }} /
+                {{ addressUtxosDisplayTotal.toLocaleString('ko-KR') }}개 표시 중입니다.
+                목록 끝으로 가면 5개씩 더 불러옵니다.
+              </p>
+            </div>
+
+            <div ref="addressPanelRef" class="address-tab-panel" @scroll="handleAddressPanelScroll">
+              <div v-if="addressUtxosLoading" class="tx-history-loading compact">
+                <div v-for="index in 5" :key="index" class="tx-skeleton-item">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div v-else-if="addressUtxos.length" class="utxo-list">
+                <div v-for="utxo in addressUtxos" :key="`${utxo.tx_hash}:${utxo.tx_pos}`" class="utxo-item">
+                  <button class="txid-button" type="button" @click="openTransactionDetail(utxo.tx_hash)">
+                    {{ utxo.tx_hash }}
+                  </button>
+                  <div class="tx-meta">
+                    <span>{{ formatSatoshiAmount(utxo.value) }}</span>
+                    <span>#{{ formatNumber(utxo.height) }}</span>
+                    <span>vout {{ utxo.tx_pos }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="addressUtxosError" class="modal-state error">{{ addressUtxosError }}</div>
+              <div v-else class="modal-state">사용 가능한 UTXO가 없습니다.</div>
+
+              <div v-if="addressUtxosLoadingMore" class="tx-history-loading compact">
+                <div v-for="index in 2" :key="index" class="tx-skeleton-item">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div v-if="addressUtxosError && addressUtxos.length" class="modal-state error">{{ addressUtxosError }}</div>
+              <div v-else-if="addressUtxosHasMore" class="tx-note">계속 스크롤하면 다음 UTXO를 불러옵니다.</div>
+              <div v-else-if="addressUtxos.length" class="tx-note">표시 가능한 UTXO의 끝입니다.</div>
+            </div>
+          </div>
+
+          <div v-else class="address-tab-content">
+            <div class="detail-section-heading">
+              <div class="modal-section-title">최근 거래내역</div>
+              <p>Electrs 인덱스에서 주소와 연결된 거래를 최근 순서로 보여줍니다.</p>
+            </div>
+
+            <div ref="addressPanelRef" class="address-tab-panel">
+              <div v-if="addressHistoryLoading" class="tx-history-loading compact">
+                <div v-for="index in 3" :key="index" class="tx-skeleton-item">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+              <div v-else-if="addressHistory.length" class="utxo-list">
+                <div v-for="history in addressHistory" :key="`${history.tx_hash}:${history.height}`" class="utxo-item">
+                  <button class="txid-button" type="button" @click="openTransactionDetail(history.tx_hash)">
+                    {{ history.tx_hash }}
+                  </button>
+                  <div class="tx-meta">
+                    <span>#{{ formatNumber(history.height) }}</span>
+                    <span v-if="history.fee">수수료 {{ formatSatoshiAmount(history.fee) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="addressHistoryError" class="modal-state error">{{ addressHistoryError }}</div>
+              <div v-else class="modal-state">최근 거래내역이 없습니다.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -553,6 +773,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import InfoTip from '@/components/InfoTip.vue'
 import type { DeviceKind } from '@/composables/useDeviceKind'
 import type { BitcoinExplorerController } from '@/composables/useBitcoinExplorer'
+import type { TransactionDetailData } from '@/api'
 import { getHalvingEpoch, HALVING_INTERVAL } from '@/domain/bitcoin'
 
 const props = defineProps<{
@@ -586,12 +807,33 @@ const {
   transactionHistoryError,
   transactionHistoryHasMore,
   transactionHistoryDisplayTotal,
+  selectedTransaction,
+  transactionDetailLoading,
+  transactionDetailError,
+  selectedAddress,
+  addressUtxos,
+  addressUtxosLoading,
+  addressUtxosLoadingMore,
+  addressUtxosError,
+  addressUtxosHasMore,
+  addressUtxosTotal,
+  addressUtxosTotalValue,
+  addressHistory,
+  addressHistoryLoading,
+  addressHistoryError,
+  addressHistoryTotal,
   closeModal,
   closeNetworkModal,
   closeSettingsModal,
   openTransactionHistory,
   closeTransactionHistory,
   loadMoreBlockTransactions,
+  openTransactionDetail,
+  closeTransactionDetail,
+  openAddressDetail,
+  closeAddressDetail,
+  loadMoreAddressUtxos,
+  loadSelectedAddressHistory,
   setDisplayUnit,
   setTimeDisplayMode,
   formatDuration,
@@ -613,6 +855,9 @@ const {
 const DETAIL_TRANSACTION_PREVIEW_LIMIT = 5
 const detailBodyRef = ref<HTMLElement | null>(null)
 const transactionHistoryBodyRef = ref<HTMLElement | null>(null)
+const addressBodyRef = ref<HTMLElement | null>(null)
+const addressPanelRef = ref<HTMLElement | null>(null)
+const addressActiveTab = ref<'utxos' | 'history'>('utxos')
 
 const previewTransactions = computed(() => {
   return selectedTransactions.value.slice(0, DETAIL_TRANSACTION_PREVIEW_LIMIT)
@@ -638,6 +883,67 @@ const currentHalvingDescription = computed(() => {
 
   return `#${formatNumber(currentHalvingEpoch.value * HALVING_INTERVAL)}부터 적용`
 })
+
+const transactionDetailTitle = computed(() => {
+  if (selectedTransaction.value?.txid) return shortTxid(selectedTransaction.value.txid)
+  if (transactionDetailLoading.value) return '불러오는 중'
+  return '확인 필요'
+})
+
+const addressUtxosDisplayTotal = computed(() => {
+  return addressUtxosTotal.value ?? addressUtxos.value.length
+})
+
+const addressHistoryDisplayTotal = computed(() => {
+  return addressHistoryTotal.value ?? addressHistory.value.length
+})
+
+const addressLoadedUtxoValue = computed(() => {
+  return addressUtxos.value.reduce((total, utxo) => total + utxo.value, 0)
+})
+
+const addressBalanceLabel = computed(() => {
+  if (addressUtxosTotalValue.value !== null) return formatSatoshiAmount(addressUtxosTotalValue.value)
+  if (addressUtxosLoading.value) return '확인 중'
+  if (addressUtxosError.value && addressUtxos.value.length === 0) return '확인 실패'
+  return formatSatoshiAmount(addressLoadedUtxoValue.value)
+})
+
+const addressBalanceCaption = computed(() => {
+  if (addressUtxosLoading.value) return '보유액 확인 중'
+  if (addressUtxosTotalValue.value !== null) return '전체 UTXO 합계'
+  if (addressUtxos.value.length > 0) return '현재 불러온 UTXO 합계'
+  if (addressUtxosError.value) return 'UTXO 조회 필요'
+  return '사용 가능한 잔액 없음'
+})
+
+function transactionInputCount(tx: TransactionDetailData) {
+  return Array.isArray(tx.vin) ? tx.vin.length : tx.vin_count ?? tx.summary?.vin_count ?? 0
+}
+
+function transactionOutputCount(tx: TransactionDetailData) {
+  return Array.isArray(tx.vout) ? tx.vout.length : tx.vout_count ?? tx.summary?.vout_count ?? 0
+}
+
+function transactionFeeSatoshi(tx: TransactionDetailData) {
+  return tx.fee_satoshi ?? tx.summary?.fee_satoshi
+}
+
+function shortTxid(txid: string) {
+  return `${txid.slice(0, 8)}...${txid.slice(-8)}`
+}
+
+function handleAddressPanelScroll(event: Event) {
+  if (addressActiveTab.value !== 'utxos') return
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return
+
+  const threshold = 180
+  const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  if (distanceToBottom <= threshold) {
+    loadMoreAddressUtxos()
+  }
+}
 
 function closeBlockDetail() {
   closeTransactionHistory()
@@ -671,6 +977,30 @@ watch(
     if (!visible) return
     await nextTick()
     transactionHistoryBodyRef.value?.scrollTo({ top: 0 })
+  },
+  { flush: 'post' }
+)
+
+watch(
+  () => selectedAddress.value,
+  async (address) => {
+    if (!address) return
+    addressActiveTab.value = 'utxos'
+    await nextTick()
+    addressBodyRef.value?.scrollTo({ top: 0 })
+    addressPanelRef.value?.scrollTo({ top: 0 })
+  },
+  { flush: 'post' }
+)
+
+watch(
+  addressActiveTab,
+  async () => {
+    if (addressActiveTab.value === 'history') {
+      loadSelectedAddressHistory()
+    }
+    await nextTick()
+    addressPanelRef.value?.scrollTo({ top: 0 })
   },
   { flush: 'post' }
 )
@@ -1420,6 +1750,189 @@ const mempoolStatusDescription = computed(() => {
     word-break: break-all;
     white-space: normal;
     user-select: text;
+  }
+}
+
+.txid-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: #8d291f;
+    outline: none;
+  }
+}
+
+.hash-line {
+  display: block;
+  margin-top: 7px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  user-select: text;
+}
+
+.address-list,
+.utxo-list {
+  display: grid;
+  gap: 8px;
+}
+
+.address-body {
+  overflow: hidden;
+}
+
+.address-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.address-balance-tile {
+  strong {
+    font-size: 1rem;
+  }
+}
+
+.address-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+
+  button {
+    min-width: 0;
+    height: 38px;
+    color: rgba(23, 35, 31, 0.58);
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 950;
+
+    &.active {
+      color: var(--ink);
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.66), rgba(222, 239, 232, 0.38)),
+        rgba(255, 255, 255, 0.28);
+      box-shadow:
+        0 8px 18px rgba(28, 45, 39, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.62);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba(49, 93, 80, 0.38);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.address-tab-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.address-tab-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.address-tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-right: 3px;
+}
+
+.address-chip,
+.utxo-item {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 10px;
+}
+
+.address-chip {
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+
+  span {
+    color: rgba(23, 35, 31, 0.58);
+    font-size: 0.68rem;
+    font-weight: 850;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: rgba(49, 93, 80, 0.34);
+    outline: none;
+  }
+}
+
+.tx-detail-modal,
+.address-modal {
+  z-index: 180;
+}
+
+.tx-detail-card,
+.address-card {
+  height: min(760px, calc(100vh - 48px));
+  height: min(760px, calc(100dvh - 48px));
+}
+
+.block-modal-mobile {
+  .address-summary-grid {
+    grid-template-columns: 1fr 1fr;
+
+    .address-balance-tile {
+      grid-column: 1 / -1;
+    }
   }
 }
 
