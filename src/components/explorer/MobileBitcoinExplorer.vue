@@ -1,6 +1,7 @@
 <template>
   <main
     class="lego-stage mobile-stage"
+    :style="{ '--mobile-keyboard-offset': `${keyboardOffset}px` }"
   >
     <form
       class="home-search"
@@ -69,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import ServerStatusPanel from '@/components/ServerStatusPanel.vue'
 import type { BitcoinExplorerController } from '@/composables/useBitcoinExplorer'
 import BlockStack from './BlockStack.vue'
@@ -96,15 +97,43 @@ const {
 
 const isSearchOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const keyboardOffset = ref(0)
+
+let keyboardUpdateTimer: number | undefined
+
+function updateKeyboardOffset() {
+  if (!isSearchOpen.value) {
+    keyboardOffset.value = 0
+    return
+  }
+
+  const viewport = window.visualViewport
+  if (!viewport) {
+    keyboardOffset.value = 0
+    return
+  }
+
+  const overlap = window.innerHeight - viewport.height - viewport.offsetTop
+  keyboardOffset.value = Math.max(0, Math.round(overlap))
+}
+
+function scheduleKeyboardOffsetUpdate() {
+  window.requestAnimationFrame(updateKeyboardOffset)
+  window.clearTimeout(keyboardUpdateTimer)
+  keyboardUpdateTimer = window.setTimeout(updateKeyboardOffset, 280)
+}
 
 async function openSearchField() {
   isSearchOpen.value = true
   await nextTick()
-  searchInputRef.value?.focus()
+  searchInputRef.value?.focus({ preventScroll: true })
+  scheduleKeyboardOffsetUpdate()
 }
 
 function closeSearchField() {
+  searchInputRef.value?.blur()
   isSearchOpen.value = false
+  keyboardOffset.value = 0
 }
 
 async function handleSearchSubmit() {
@@ -114,6 +143,19 @@ async function handleSearchSubmit() {
   }
   await submitSearch()
 }
+
+onMounted(() => {
+  window.visualViewport?.addEventListener('resize', scheduleKeyboardOffsetUpdate)
+  window.visualViewport?.addEventListener('scroll', scheduleKeyboardOffsetUpdate)
+  window.addEventListener('resize', scheduleKeyboardOffsetUpdate)
+})
+
+onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', scheduleKeyboardOffsetUpdate)
+  window.visualViewport?.removeEventListener('scroll', scheduleKeyboardOffsetUpdate)
+  window.removeEventListener('resize', scheduleKeyboardOffsetUpdate)
+  window.clearTimeout(keyboardUpdateTimer)
+})
 </script>
 
 <style scoped lang="scss">
@@ -185,7 +227,7 @@ async function handleSearchSubmit() {
   }
 
   &.home-search-open {
-    bottom: calc(76px + env(safe-area-inset-bottom));
+    bottom: calc(76px + env(safe-area-inset-bottom) + var(--mobile-keyboard-offset, 0px));
     grid-template-columns: minmax(0, 1fr) 54px 38px;
     place-items: stretch;
     gap: 7px;
@@ -319,7 +361,7 @@ async function handleSearchSubmit() {
 .search-error {
   position: fixed;
   right: 12px;
-  bottom: calc(138px + env(safe-area-inset-bottom));
+  bottom: calc(138px + env(safe-area-inset-bottom) + var(--mobile-keyboard-offset, 0px));
   z-index: 27;
   width: min(330px, calc(100vw - 24px));
   padding: 9px 11px;
