@@ -61,6 +61,8 @@ const DISPLAY_UNIT_STORAGE_KEY = 'bitcoin-content-display-unit'
 const TIME_DISPLAY_MODE_STORAGE_KEY = 'bitcoin-content-time-display-mode'
 const TRANSACTION_HISTORY_PAGE_SIZE = 5
 const ADDRESS_PAGE_SIZE = 5
+const MAINNET_BASE58_ADDRESS_PATTERN = /^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/
+const MAINNET_BECH32_ADDRESS_PATTERN = /^bc1[ac-hj-np-z02-9]{8,87}$/i
 
 type LatestStatusSyncOptions = {
   animateNewBlocks?: boolean
@@ -109,10 +111,12 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   const addressUtxosTotal = ref<number | null>(null)
   const addressUtxosTotalValue = ref<number | null>(null)
   const addressUtxosNextOffset = ref(0)
+  const addressUtxosRequested = ref(false)
   const addressHistory = ref<AddressHistoryData[]>([])
   const addressHistoryLoading = ref(false)
   const addressHistoryError = ref('')
   const addressHistoryTotal = ref<number | null>(null)
+  const addressHistoryRequested = ref(false)
   const networkModalVisible = ref(false)
   const mempoolModalVisible = ref(false)
   const settingsModalVisible = ref(false)
@@ -415,6 +419,17 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     const query = searchQuery.value.trim()
     if (!query || searchLoading.value) return
 
+    if (isLikelyMainnetAddress(query)) {
+      const requestId = ++searchRequestId
+      searchLoading.value = false
+      searchError.value = ''
+      closeModal()
+      closeTransactionDetail()
+      openAddressDetail(query)
+      if (requestId !== searchRequestId) return
+      return
+    }
+
     const requestId = ++searchRequestId
     searchLoading.value = true
     searchError.value = ''
@@ -491,7 +506,8 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   function openAddressDetail(
     address: string,
     initialUtxos?: AddressUtxosResponse,
-    initialHistory?: AddressHistoryData[]
+    initialHistory?: AddressHistoryData[],
+    options: { autoLoad?: boolean } = {}
   ) {
     if (!address) return
 
@@ -501,6 +517,16 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     addressHistoryError.value = ''
     addressUtxos.value = []
     addressHistory.value = []
+    addressUtxosRequested.value = Boolean(initialUtxos)
+    addressHistoryRequested.value = Boolean(initialHistory)
+    addressUtxosLoading.value = false
+    addressUtxosLoadingMore.value = false
+    addressHistoryLoading.value = false
+    addressUtxosHasMore.value = false
+    addressUtxosTotal.value = null
+    addressUtxosTotalValue.value = null
+    addressUtxosNextOffset.value = 0
+    addressHistoryTotal.value = null
 
     if (initialUtxos) {
       applyAddressUtxosPage(initialUtxos, true)
@@ -509,7 +535,7 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
       addressHistory.value = initialHistory
     }
 
-    if (!initialUtxos) {
+    if (!initialUtxos && options.autoLoad) {
       loadAddressUtxos(true, requestId)
     }
   }
@@ -525,14 +551,30 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     addressUtxosTotal.value = null
     addressUtxosTotalValue.value = null
     addressUtxosNextOffset.value = 0
+    addressUtxosRequested.value = false
     addressHistory.value = []
     addressHistoryLoading.value = false
     addressHistoryError.value = ''
     addressHistoryTotal.value = null
+    addressHistoryRequested.value = false
+  }
+
+  function startAddressUtxoLookup() {
+    if (!selectedAddress.value) return
+    if (addressUtxosLoading.value || addressUtxosLoadingMore.value) return
+
+    addressUtxosRequested.value = true
+    addressUtxos.value = []
+    addressUtxosTotal.value = null
+    addressUtxosTotalValue.value = null
+    addressUtxosNextOffset.value = 0
+    addressUtxosHasMore.value = false
+    loadAddressUtxos(true, addressRequestId)
   }
 
   function loadMoreAddressUtxos() {
     if (!selectedAddress.value) return
+    if (!addressUtxosRequested.value) return
     if (!addressUtxosHasMore.value) return
     if (addressUtxosLoading.value || addressUtxosLoadingMore.value) return
 
@@ -566,8 +608,9 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   function loadSelectedAddressHistory() {
     if (!selectedAddress.value) return
     if (addressHistoryLoading.value) return
-    if (addressHistory.value.length > 0 || addressHistoryError.value) return
+    if (addressHistory.value.length > 0) return
 
+    addressHistoryRequested.value = true
     loadAddressHistory(addressRequestId)
   }
 
@@ -628,10 +671,17 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
   }
 
   function addressLoadErrorMessage(error: unknown, label: string) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return `${label} 조회가 오래 걸려 중단했습니다. 외부 탐색기를 이용하거나 잠시 후 다시 시도해 주세요.`
+    }
     if (error instanceof Error && error.message.includes('electrum')) {
       return `거래가 많은 주소라 ${label} 조회가 오래 걸려 실패했습니다. 잠시 후 다시 시도해 주세요.`
     }
     return `주소 ${label}를 불러오지 못했습니다.`
+  }
+
+  function isLikelyMainnetAddress(value: string) {
+    return MAINNET_BASE58_ADDRESS_PATTERN.test(value) || MAINNET_BECH32_ADDRESS_PATTERN.test(value)
   }
 
   function appendUniqueTransactions(
@@ -1395,10 +1445,12 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     addressUtxosHasMore,
     addressUtxosTotal,
     addressUtxosTotalValue,
+    addressUtxosRequested,
     addressHistory,
     addressHistoryLoading,
     addressHistoryError,
     addressHistoryTotal,
+    addressHistoryRequested,
     networkModalVisible,
     mempoolModalVisible,
     settingsModalVisible,
@@ -1430,6 +1482,7 @@ export function useBitcoinExplorer(deviceKind: Readonly<Ref<DeviceKind>>) {
     closeTransactionDetail,
     openAddressDetail,
     closeAddressDetail,
+    startAddressUtxoLookup,
     loadMoreAddressUtxos,
     loadSelectedAddressHistory,
     openNetworkModal,

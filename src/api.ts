@@ -178,15 +178,27 @@ export interface ServerStatusData {
   }
 }
 
-async function request<T>(path: string): Promise<T> {
+type RequestOptions = {
+  timeoutMs?: number
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   if (!API_BASE_URL) {
     throw new Error('VITE_BTC_API_BASE_URL이 설정되지 않았습니다.')
   }
 
+  const controller = options.timeoutMs ? new AbortController() : null
+  const timeoutId = options.timeoutMs
+    ? window.setTimeout(() => controller?.abort(), options.timeoutMs)
+    : undefined
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    signal: controller?.signal,
     headers: API_KEY
       ? { 'X-API-Key': API_KEY }
       : {}
+  }).finally(() => {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId)
   })
 
   const contentType = response.headers.get('content-type') || ''
@@ -230,7 +242,8 @@ export async function fetchAddressUtxos(
   limit: number
 ): Promise<AddressUtxosResponse> {
   return request<AddressUtxosResponse>(
-    `/api/v1/address/${encodeURIComponent(address)}/utxos?offset=${offset}&limit=${limit}`
+    `/api/v1/address/${encodeURIComponent(address)}/utxos?offset=${offset}&limit=${limit}`,
+    { timeoutMs: 12000 }
   )
 }
 
@@ -240,7 +253,8 @@ export async function fetchAddressHistory(
   limit: number
 ): Promise<AddressHistoryResponse> {
   return request<AddressHistoryResponse>(
-    `/api/v1/address/${encodeURIComponent(address)}/history?offset=${offset}&limit=${limit}`
+    `/api/v1/address/${encodeURIComponent(address)}/history?offset=${offset}&limit=${limit}`,
+    { timeoutMs: 12000 }
   )
 }
 

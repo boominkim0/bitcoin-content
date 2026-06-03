@@ -647,6 +647,33 @@
           <code class="hash-line">{{ selectedAddress }}</code>
         </section>
 
+        <section class="address-quick-panel">
+          <div>
+            <strong>주소는 바로 확인했습니다</strong>
+            <p>UTXO와 전체 거래내역은 주소 규모에 따라 오래 걸릴 수 있어 필요한 정보만 5개씩 조회합니다.</p>
+          </div>
+          <div class="address-action-row">
+            <button
+              class="address-action primary"
+              type="button"
+              :disabled="addressUtxosLoading || addressUtxosLoadingMore"
+              @click="startAddressUtxoLookup"
+            >
+              {{ addressUtxosLoading ? '조회 중' : 'UTXO 5개 조회' }}
+            </button>
+            <a
+              v-for="link in addressExplorerLinks"
+              :key="link.href"
+              class="address-action"
+              :href="link.href"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {{ link.label }}
+            </a>
+          </div>
+        </section>
+
         <section class="address-summary-grid">
           <div class="metric-tile address-balance-tile">
             <span class="modal-label">총 보유액</span>
@@ -655,13 +682,13 @@
           </div>
           <div class="metric-tile">
             <span class="modal-label">사용 가능한 UTXO</span>
-            <strong>{{ addressUtxosDisplayTotal.toLocaleString('ko-KR') }}개</strong>
-            <small>{{ addressUtxos.length.toLocaleString('ko-KR') }}개 불러옴</small>
+            <strong>{{ addressUtxosRequested ? `${addressUtxosDisplayTotal.toLocaleString('ko-KR')}개` : '조회 전' }}</strong>
+            <small>{{ addressUtxosRequested ? `${addressUtxos.length.toLocaleString('ko-KR')}개 불러옴` : '필요할 때 조회' }}</small>
           </div>
           <div class="metric-tile">
             <span class="modal-label">최근 거래내역</span>
-            <strong>{{ addressHistoryDisplayTotal.toLocaleString('ko-KR') }}개</strong>
-            <small>최근 순서로 확인</small>
+            <strong>{{ addressHistoryRequested ? `${addressHistoryDisplayTotal.toLocaleString('ko-KR')}개` : '조회 전' }}</strong>
+            <small>{{ addressHistoryRequested ? '최근 순서로 확인' : '탭에서 따로 조회' }}</small>
           </div>
         </section>
 
@@ -691,14 +718,26 @@
             <div class="detail-section-heading">
               <div class="modal-section-title">사용 가능한 UTXO</div>
               <p>
-                {{ addressUtxos.length.toLocaleString('ko-KR') }} /
-                {{ addressUtxosDisplayTotal.toLocaleString('ko-KR') }}개 표시 중입니다.
-                목록 끝으로 가면 5개씩 더 불러옵니다.
+                <template v-if="addressUtxosRequested">
+                  {{ addressUtxos.length.toLocaleString('ko-KR') }} /
+                  {{ addressUtxosDisplayTotal.toLocaleString('ko-KR') }}개 표시 중입니다.
+                  목록 끝으로 가면 5개씩 더 불러옵니다.
+                </template>
+                <template v-else>
+                  주소가 큰 경우 조회가 오래 걸릴 수 있어 버튼을 누를 때만 가져옵니다.
+                </template>
               </p>
             </div>
 
             <div ref="addressPanelRef" class="address-tab-panel" @scroll="handleAddressPanelScroll">
-              <div v-if="addressUtxosLoading" class="tx-history-loading compact">
+              <div v-if="!addressUtxosRequested" class="address-lookup-empty">
+                <strong>아직 UTXO를 조회하지 않았습니다</strong>
+                <p>내 미니 PC 서버에서 사용 가능한 UTXO를 5개만 먼저 불러옵니다.</p>
+                <button class="address-action primary" type="button" @click="startAddressUtxoLookup">
+                  UTXO 조회 시작
+                </button>
+              </div>
+              <div v-else-if="addressUtxosLoading" class="tx-history-loading compact">
                 <div v-for="index in 5" :key="index" class="tx-skeleton-item">
                   <span></span>
                   <span></span>
@@ -736,11 +775,18 @@
           <div v-else class="address-tab-content">
             <div class="detail-section-heading">
               <div class="modal-section-title">최근 거래내역</div>
-              <p>Electrs 인덱스에서 주소와 연결된 거래를 최근 순서로 보여줍니다.</p>
+              <p>필요할 때만 Electrs 인덱스에서 주소와 연결된 거래를 5개 조회합니다.</p>
             </div>
 
             <div ref="addressPanelRef" class="address-tab-panel">
-              <div v-if="addressHistoryLoading" class="tx-history-loading compact">
+              <div v-if="!addressHistoryRequested" class="address-lookup-empty">
+                <strong>거래내역은 아직 조회하지 않았습니다</strong>
+                <p>거래가 많은 주소에서는 오래 걸릴 수 있어 따로 요청할 때만 불러옵니다.</p>
+                <button class="address-action primary" type="button" @click="loadSelectedAddressHistory">
+                  거래내역 5개 조회
+                </button>
+              </div>
+              <div v-else-if="addressHistoryLoading" class="tx-history-loading compact">
                 <div v-for="index in 3" :key="index" class="tx-skeleton-item">
                   <span></span>
                   <span></span>
@@ -818,10 +864,12 @@ const {
   addressUtxosHasMore,
   addressUtxosTotal,
   addressUtxosTotalValue,
+  addressUtxosRequested,
   addressHistory,
   addressHistoryLoading,
   addressHistoryError,
   addressHistoryTotal,
+  addressHistoryRequested,
   closeModal,
   closeNetworkModal,
   closeSettingsModal,
@@ -832,6 +880,7 @@ const {
   closeTransactionDetail,
   openAddressDetail,
   closeAddressDetail,
+  startAddressUtxoLookup,
   loadMoreAddressUtxos,
   loadSelectedAddressHistory,
   setDisplayUnit,
@@ -905,6 +954,7 @@ const addressLoadedUtxoValue = computed(() => {
 const addressBalanceLabel = computed(() => {
   if (addressUtxosTotalValue.value !== null) return formatSatoshiAmount(addressUtxosTotalValue.value)
   if (addressUtxosLoading.value) return '확인 중'
+  if (!addressUtxosRequested.value && addressUtxos.value.length === 0) return '조회 전'
   if (addressUtxosError.value && addressUtxos.value.length === 0) return '확인 실패'
   return formatSatoshiAmount(addressLoadedUtxoValue.value)
 })
@@ -913,8 +963,26 @@ const addressBalanceCaption = computed(() => {
   if (addressUtxosLoading.value) return '보유액 확인 중'
   if (addressUtxosTotalValue.value !== null) return '전체 UTXO 합계'
   if (addressUtxos.value.length > 0) return '현재 불러온 UTXO 합계'
+  if (!addressUtxosRequested.value) return 'UTXO 조회 후 표시'
   if (addressUtxosError.value) return 'UTXO 조회 필요'
   return '사용 가능한 잔액 없음'
+})
+
+const addressExplorerLinks = computed(() => {
+  const address = selectedAddress.value.trim()
+  if (!address) return []
+  const encodedAddress = encodeURIComponent(address)
+
+  return [
+    {
+      label: 'mempool.space',
+      href: `https://mempool.space/address/${encodedAddress}`
+    },
+    {
+      label: 'Blockstream',
+      href: `https://blockstream.info/address/${encodedAddress}`
+    }
+  ]
 })
 
 function transactionInputCount(tx: TransactionDetailData) {
@@ -996,7 +1064,7 @@ watch(
 watch(
   addressActiveTab,
   async () => {
-    if (addressActiveTab.value === 'history') {
+    if (addressActiveTab.value === 'history' && addressHistoryRequested.value) {
       loadSelectedAddressHistory()
     }
     await nextTick()
@@ -1800,6 +1868,73 @@ const mempoolStatusDescription = computed(() => {
   overflow: hidden;
 }
 
+.address-quick-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.48), rgba(142, 185, 177, 0.16)),
+    rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+
+  strong {
+    display: block;
+    color: var(--ink);
+    font-size: 0.88rem;
+    font-weight: 950;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: rgba(23, 35, 31, 0.62);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+}
+
+.address-action-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 7px;
+}
+
+.address-action {
+  display: grid;
+  place-items: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: rgba(37, 92, 75, 0.82);
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 10px;
+  text-align: center;
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 950;
+  cursor: pointer;
+
+  &.primary {
+    color: rgba(255, 253, 246, 0.96);
+    background:
+      linear-gradient(145deg, rgba(49, 93, 80, 0.86), rgba(91, 129, 116, 0.74)),
+      rgba(49, 93, 80, 0.78);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.62;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: rgba(49, 93, 80, 0.36);
+    outline: none;
+  }
+}
+
 .address-summary-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
@@ -1878,6 +2013,34 @@ const mempoolStatusDescription = computed(() => {
   padding-right: 3px;
 }
 
+.address-lookup-empty {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  color: rgba(23, 35, 31, 0.68);
+  background: rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 12px;
+
+  strong {
+    color: var(--ink);
+    font-size: 0.82rem;
+    font-weight: 950;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .address-action {
+    justify-self: start;
+    min-width: 150px;
+  }
+}
+
 .address-chip,
 .utxo-item {
   display: grid;
@@ -1927,12 +2090,127 @@ const mempoolStatusDescription = computed(() => {
 }
 
 .block-modal-mobile {
+  &.address-modal {
+    align-items: flex-end;
+    padding: 0;
+
+    .address-card {
+      width: 100%;
+      height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+      max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+      padding: 18px 14px calc(14px + env(safe-area-inset-bottom));
+      border-radius: 20px 20px 0 0;
+    }
+
+    .modal-header {
+      margin-bottom: 9px;
+    }
+  }
+
+  .address-action-row {
+    grid-template-columns: 1.15fr 1fr 1fr;
+    gap: 6px;
+  }
+
+  .address-action {
+    min-height: 34px;
+    padding: 7px 6px;
+    border-radius: 9px;
+    font-size: 0.64rem;
+    line-height: 1.15;
+  }
+
   .address-summary-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
 
     .address-balance-tile {
-      grid-column: 1 / -1;
+      grid-column: auto;
     }
+  }
+
+  .address-quick-panel {
+    gap: 8px;
+    padding: 10px;
+
+    strong {
+      font-size: 0.8rem;
+    }
+
+    p {
+      display: none;
+    }
+  }
+
+  .address-body {
+    gap: 8px;
+  }
+
+  .address-body .detail-hero-card {
+    padding: 10px 11px;
+  }
+
+  .address-body .hash-line {
+    margin-top: 5px;
+    font-size: 0.68rem;
+    line-height: 1.32;
+  }
+
+  .address-body .metric-tile {
+    min-height: 58px;
+    padding: 8px;
+
+    .modal-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.02em;
+    }
+
+    strong {
+      margin-top: 2px;
+      font-size: 0.78rem;
+      line-height: 1.1;
+    }
+
+    small {
+      font-size: 0.58rem;
+      line-height: 1.2;
+    }
+  }
+
+  .address-tabs {
+    padding: 3px;
+
+    button {
+      height: 32px;
+      border-radius: 8px;
+      font-size: 0.72rem;
+    }
+  }
+
+  .address-tab-card {
+    min-height: min(46dvh, 430px);
+  }
+
+  .address-tab-content .detail-section-heading {
+    margin-bottom: 6px;
+
+    .modal-section-title {
+      margin-bottom: 0;
+      font-size: 0.72rem;
+    }
+
+    p {
+      display: none;
+    }
+  }
+
+  .address-tab-panel {
+    gap: 7px;
+    padding-right: 0;
+  }
+
+  .address-lookup-empty {
+    padding: 12px;
   }
 }
 

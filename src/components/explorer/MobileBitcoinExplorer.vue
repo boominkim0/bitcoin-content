@@ -209,6 +209,8 @@ onUnmounted(() => {
   transition:
     width 0.34s cubic-bezier(0.18, 0.89, 0.24, 1.08),
     height 0.28s ease,
+    left 0.34s cubic-bezier(0.18, 0.89, 0.24, 1.08),
+    right 0.34s cubic-bezier(0.18, 0.89, 0.24, 1.08),
     bottom 0.34s cubic-bezier(0.18, 0.89, 0.24, 1.08),
     border-radius 0.34s ease,
     background 0.24s ease,
@@ -227,11 +229,13 @@ onUnmounted(() => {
   }
 
   &.home-search-open {
-    bottom: calc(76px + env(safe-area-inset-bottom) + var(--mobile-keyboard-offset, 0px));
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--mobile-keyboard-offset, 0px));
     grid-template-columns: minmax(0, 1fr) 54px 38px;
     place-items: stretch;
     gap: 7px;
-    width: min(330px, calc(100vw - 24px));
+    width: auto;
     height: 56px;
     padding: 7px;
     background:
@@ -360,10 +364,11 @@ onUnmounted(() => {
 
 .search-error {
   position: fixed;
+  left: 12px;
   right: 12px;
-  bottom: calc(138px + env(safe-area-inset-bottom) + var(--mobile-keyboard-offset, 0px));
+  bottom: calc(80px + env(safe-area-inset-bottom) + var(--mobile-keyboard-offset, 0px));
   z-index: 27;
-  width: min(330px, calc(100vw - 24px));
+  width: auto;
   padding: 9px 11px;
   color: #8d291f;
   background:
